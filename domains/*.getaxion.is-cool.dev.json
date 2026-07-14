@@ -7,7 +7,7 @@
         "email": "azrielspace852@gmail.com"
     },
     "record": {
-        "TXT": ["resend-verifikasi=xxx..."]
+        "TXT": ["p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQC/42DoXOvsYhVFnouMBRCzzxrDWHvPqYA7QWCW9NtqV3PiNtrscbxI/XR0g+28t0NFx1L+WOcgpphVSzpH5G6mCxJuXcRMB+pE7CnCo/RTXj4YPXbAQhDZLh5sq55EQLnOdVO9DBP8pMpIoVqUPvGGMa6SAXWQ4qtilqyls20E8wIDAQAB"]
     },
     "proxied": false
 }
