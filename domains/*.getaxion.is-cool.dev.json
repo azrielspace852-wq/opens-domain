@@ -1,0 +1,13 @@
+{
+    "description": "Belajar integrasi email dengan Resend",
+    "domain": "is-cool.dev",
+    "subdomain": "getaxion",
+    "owner": {
+        "repo": "https://github.com/azrielspace852-wq/register",
+        "email": "azrielspace852@gmail.com"
+    },
+    "record": {
+        "TXT": ["resend-verifikasi=xxx..."]
+    },
+    "proxied": false
+}
