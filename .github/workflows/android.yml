@@ -1,3 +1,4 @@
+# .github/workflows/render.yml
 name: Render Motion Graphics Video
 
 on:
@@ -18,54 +19,20 @@ jobs:
       with:
         node-version: '20'
         
-    - name: Install FFmpeg
-      run: sudo apt-get update && sudo apt-get install -y ffmpeg
-      
-    - name: Install Chromium OS Dependencies & Emoji Fonts
-      # Memastikan headless Chrome dapat berjalan dan Emoji tampil dengan benar (bukan kotak kosong)
+    - name: Install FFmpeg & Emoji Fonts
       run: |
-        sudo apt-get install -y \
-        fonts-noto-color-emoji \
-        ca-certificates \
-        fonts-liberation \
-        libasound2 \
-        libatk-bridge2.0-0 \
-        libatk1.0-0 \
-        libc6 \
-        libcairo2 \
-        libcups2 \
-        libdbus-1-3 \
-        libexpat1 \
-        libfontconfig1 \
-        libgbm1 \
-        libgcc1 \
-        libglib2.0-0 \
-        libgtk-3-0 \
-        libnspr4 \
-        libnss3 \
-        libpango-1.0-0 \
-        libpangocairo-1.0-0 \
-        libstdc++6 \
-        libx11-6 \
-        libx11-xcb1 \
-        libxcb1 \
-        libxcomposite1 \
-        libxcursor1 \
-        libxdamage1 \
-        libxext6 \
-        libxfixes3 \
-        libxi6 \
-        libxrandr2 \
-        libxrender1 \
-        libxss1 \
-        libxtst6 \
-        lsb-release \
-        wget \
-        xdg-utils
-
+        sudo apt-get update
+        # Install FFmpeg untuk encoding video dan font emoji agar ikon tampil berwarna di headless Chrome
+        sudo apt-get install -y ffmpeg fonts-noto-color-emoji
+      
     - name: Install Node Dependencies
       # Puppeteer akan otomatis mengunduh binary Chromium yang kompatibel
       run: npm install puppeteer
+      
+    - name: Install Chromium OS Dependencies (Auto-Detect)
+      # Solusi robust: Biarkan Puppeteer mendeteksi OS dan menginstal dependensi sistem yang benar.
+      # Ini menghindari error incompatibilitas paket manual seperti libasound2 vs libasound2t64.
+      run: npx puppeteer install-deps
       
     - name: Run Video Renderer
       run: node render.js
@@ -75,4 +42,4 @@ jobs:
       with:
         name: part-01-enkripsi-video
         path: output/part-01-apa-itu-enkripsi.mp4
-        retention-days: 7 
+        retention-days: 7
