@@ -1,0 +1,62 @@
+name: Render Part 02 DES
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "render-video.js"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/render-part-02-des.yml"
+
+jobs:
+  render-video:
+    name: Render Part 02 DES Video
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ffmpeg \
+            fonts-dejavu-core \
+            libcairo2 \
+            libpango-1.0-0 \
+            libjpeg4 \
+            libgif7 \
+            librsvg2-2 \
+            libpixman-1-0 \
+            libcairo2-dev \
+            libpango1.0-dev \
+            libjpeg-dev \
+            libgif-dev \
+            librsvg2-dev
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Render video
+        run: node render-video.js --output part-02-jenis-jenis-enkripsi-des.mp4
+
+      - name: Verify output file
+        run: |
+          ls -lh part-02-jenis-jenis-enkripsi-des.mp4
+          ffprobe -v error -show_entries format=duration,size -of default=noprint_wrappers=1 part-02-jenis-jenis-enkripsi-des.mp4
+
+      - name: Upload rendered MP4 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: part-02-jenis-jenis-enkripsi-des
+          path: part-02-jenis-jenis-enkripsi-des.mp4
+          retention-days: 14
