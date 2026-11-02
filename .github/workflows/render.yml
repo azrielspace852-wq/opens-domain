@@ -1,0 +1,115 @@
+name: Render JavaScript Content
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Mode rendering"
+        required: true
+        type: choice
+        options:
+          - video
+          - photo
+        default: video
+      video_fps:
+        description: "FPS untuk mode video"
+        required: true
+        type: choice
+        options:
+          - "10"
+          - "20"
+          - "30"
+          - "60"
+        default: "30"
+      video_resolution:
+        description: "Resolusi video"
+        required: true
+        type: choice
+        options:
+          - 360p
+          - 480p
+          - 720p
+          - 1080p
+          - 2160p
+        default: 1080p
+      aspect_ratio:
+        description: "Rasio aspek"
+        required: true
+        type: choice
+        options:
+          - "16:9"
+          - "9:16"
+          - "1:1"
+        default: "16:9"
+      duration:
+        description: "Durasi video dalam detik (misalnya 12 atau 12.5)"
+        required: true
+        type: number
+        default: 5
+      image_resolution:
+        description: "Resolusi foto"
+        required: true
+        type: choice
+        options:
+          - 12MP
+          - 24MP
+          - 48MP
+          - 108MP
+        default: 24MP
+      image_format:
+        description: "Format foto"
+        required: true
+        type: choice
+        options:
+          - PNG
+          - JPG
+        default: PNG
+
+permissions:
+  contents: read
+
+concurrency:
+  group: content-render-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  render:
+    name: Render content files
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install renderer dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes ffmpeg
+          ffmpeg -version
+
+      - name: Render JavaScript content
+        env:
+          RENDER_MODE: ${{ inputs.mode }}
+          RENDER_FPS: ${{ inputs.video_fps }}
+          RENDER_VIDEO_RESOLUTION: ${{ inputs.video_resolution }}
+          RENDER_ASPECT_RATIO: ${{ inputs.aspect_ratio }}
+          RENDER_DURATION: ${{ inputs.duration }}
+          RENDER_IMAGE_RESOLUTION: ${{ inputs.image_resolution }}
+          RENDER_IMAGE_FORMAT: ${{ inputs.image_format }}
+        run: npm run render
+
+      - name: Upload rendered files
+        uses: actions/upload-artifact@v4
+        with:
+          name: rendered-${{ inputs.mode }}-${{ github.run_number }}
+          path: output/
+          if-no-files-found: error
+          retention-days: 14

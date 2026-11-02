@@ -1,0 +1,18 @@
+{
+  "name": "github-content-renderer",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Manual GitHub Actions renderer for JavaScript Canvas scenes to MP4, PNG, and JPG.",
+  "scripts": {
+    "render": "node scripts/render.mjs",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "dependencies": {
+    "pureimage": "0.4.20",
+    "esbuild": "0.28.2"
+  }
+}
