@@ -1,8 +1,0 @@
-node_modules/
-output/
-.render-cache/
-benchmarks/results/.*
-benchmarks/results/*.mp4
-benchmarks/results/*.rgba
-.DS_Store
-Thumbs.db
