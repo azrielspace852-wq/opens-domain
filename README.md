@@ -1,10 +1,10 @@
-## 📄 License
-
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
 
 Copyright (c) 2025 **AXION Neuralis**
+
+[![Render JavaScript Content](https://github.com/azrielspace852-wq/video-renderer/actions/workflows/render.yml/badge.svg?event=workflow_run)](https://github.com/azrielspace852-wq/video-renderer/actions/workflows/render.yml) 
 
 # GitHub JavaScript Content Renderer
 
