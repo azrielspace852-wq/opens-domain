@@ -43,6 +43,12 @@ on:
         required: true
         type: number
         default: 18
+      log_level:
+        description: "Tingkat detail log"
+        required: true
+        type: choice
+        options: [quiet, normal, verbose]
+        default: normal
       timeout_minutes:
         description: "Batas waktu job Actions dalam menit"
         required: true
@@ -108,6 +114,12 @@ jobs:
           FFMPEG_PRESET: ${{ inputs.ffmpeg_preset }}
           FFMPEG_CRF: ${{ inputs.ffmpeg_crf }}
           FFMPEG_THREADS: "0"
+          LOG_LEVEL: ${{ inputs.log_level }}
+          PROGRESS_INTERVAL_MS: "5000"
+          PROGRESS_PERCENT_STEP: "5"
+          PROGRESS_MIN_INTERVAL_MS: "1000"
+          PROGRESS_MAX_UPDATES: "100"
+          PROGRESS_BAR_WIDTH: "32"
         run: npm run render
 
       - name: Upload rendered files
