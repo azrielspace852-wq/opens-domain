@@ -1,3 +1,5 @@
+
+
 # GitHub JavaScript Content Renderer
 
 Tool untuk merender seluruh scene JavaScript di `content/` menjadi video MP4 atau gambar PNG/JPG melalui GitHub Actions. Workflow hanya berjalan ketika pengguna menekan **Actions → Render JavaScript Content → Run workflow**.
@@ -23,7 +25,7 @@ Tool untuk merender seluruh scene JavaScript di `content/` menjadi video MP4 ata
 ## Struktur repository
 
 ```text
-.
+video-renderer/
 ├── .github/
 │   └── workflows/
 │       └── render.yml
