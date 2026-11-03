@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1280, initial-scale=1.0">
+    <title>DES Animation</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            background: #000;
+            overflow: hidden;
+            width: 1280px;
+            height: 720px;
+        }
+        #stage {
+            display: block;
+            width: 1280px;
+            height: 720px;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="stage" width="1280" height="720"></canvas>
+    <script>
+        const canvas = document.getElementById('stage');
+        const ctx = canvas.getContext('2d');
+
+        function clamp(val, min, max) {
+            return Math.max(min, Math.min(max, val));
+        }
+
+        function drawWatermarks(ctx) {
+            ctx.font = '20px sans-serif';
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+            
+            ctx.textAlign = 'left';
+            ctx.fillText('AZRIEL Space', 20, 35);
+            
+            ctx.textAlign = 'right';
+            ctx.fillText('AI Gabut', 1260, 35);
+            
+            ctx.textAlign = 'left';
+            ctx.fillText('AZRIEL', 20, 700);
+            
+            ctx.textAlign = 'right';
+            ctx.fillText('AXION Neuralis', 1260, 700);
+        }
+
+        function drawAzriel(ctx, x, y, scale, action, t) {
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.scale(scale, scale);
+            
+            // Body (shorts, short sleeve shirt)
+            ctx.fillStyle = '#222222'; 
+            ctx.beginPath();
+            ctx.moveTo(-40, 0);
+            ctx.lineTo(40, 0);
+            ctx.lineTo(50, 100);
+            ctx.lineTo(-50, 100);
+            ctx.closePath();
+            ctx.fill();
+            
+            // Arms
+            ctx.strokeStyle = '#ffccaa'; 
+            ctx.lineWidth = 15;
+            ctx.lineCap = 'round';
+            if (action === 'wave') {
+                const angle = Math.sin(t * 5) * 0.3 - 0.5;
+                ctx.save();
+                ctx.translate(-40, 20);
+                ctx.rotate(angle);
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.lineTo(-40, -60);
+                ctx.stroke();
+                ctx.restore();
+                
+                ctx.beginPath();
+                ctx.moveTo(40, 20);
+                ctx.lineTo(60, 80);
+                ctx.stroke();
+            } else if (action === 'thumbsup') {
+                ctx.beginPath();
+                ctx.moveTo(-40, 20);
+                ctx.lineTo(-60, 80);
+                ctx.stroke();
+                
+                ctx.beginPath();
+                ctx.moveTo(40, 20);
+                ctx.lineTo(80, -20);
+                ctx.stroke();
+                ctx.fillStyle = '#ffccaa';
+                ctx.beginPath();
+                ctx.arc(80, -20, 12, 0, Math.PI * 2);
+                ctx.fill();
+            } else if (action === 'point') {
+                ctx.beginPath();
+                ctx.moveTo(-40, 20);
+                ctx.lineTo(-60, 80);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(40, 20);
+                ctx.lineTo(90, 20);
+                ctx.stroke();
+            } else {
+                ctx.beginPath();
+                ctx.moveTo(-40, 20);
+                ctx.lineTo(-60, 80);
+                ctx.moveTo(40, 20);
+                ctx.lineTo(60, 80);
+                ctx.stroke();
+            }
+            
+            // Shorts
+            ctx.fillStyle = '#113355';
+            ctx.fillRect(-45, 100, 90, 50);
+            // Legs
+            ctx.strokeStyle = '#ffccaa';
+            ctx.lineWidth = 18;
+            ctx.beginPath();
+            ctx.moveTo(-20, 150);
+            ctx.lineTo(-20, 220);
+            ctx.moveTo(20, 150);
+            ctx.lineTo(20, 220);
+            ctx.stroke();
+            
+            // Head
+            ctx.fillStyle = '#ffccaa';
+            ctx.beginPath();
+            ctx.arc(0, -50, 45, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Hair (covers half eyes)
+            ctx.fillStyle = '#111111';
+            ctx.beginPath();
+            ctx.arc(0, -60, 50, Math.PI, 0);
+            ctx.fill();
+            // Bangs over right eye (viewer's left)
+            ctx.beginPath();
+            ctx.moveTo(-45, -60);
+            ctx.quadraticCurveTo(-20, -20, 10, -40);
+            ctx.lineTo(45, -60);
+            ctx.closePath();
+            ctx.fill();
+            
+            // Earring on character's right ear (viewer's left)
+            ctx.strokeStyle = '#C0C0C0';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(-45, -40, 8, 0, Math.PI * 2);
+            ctx.stroke();
+            
+            // Eyes (only right eye visible from viewer's perspective)
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(20, -50, 8, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#000000';
+            ctx.beginPath();
+            ctx.arc(20, -50, 4, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.restore();
+        }
+
+        function drawSmallAzriel(ctx, x, y) {
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.scale(0.3, 0.3);
+            drawAzriel(ctx, 0, 0, 1, 'idle', 0);
+            ctx.restore();
+        }
+
+        function drawScene0(ctx, t) {
+            const cx = 640, cy = 300;
+            const scale = 1 + 0.1 * Math.sin(t * 2);
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.scale(scale, scale);
+            ctx.strokeStyle = '#00ff41';
+            ctx.lineWidth = 20;
+            ctx.beginPath();
+            ctx.arc(0, -40, 50, Math.PI, 0);
+            ctx.stroke();
+            ctx.fillStyle = '#0d1f0d';
+            ctx.strokeStyle = '#39ff14';
+            ctx.lineWidth = 5;
+            ctx.fillRect(-60, -20, 120, 90);
+            ctx.strokeRect(-60, -20, 120, 90);
+            ctx.fillStyle = '#00ff41';
+            ctx.beginPath();
+            ctx.arc(0, 10, 15, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillRect(-5, 10, 10, 30);
+            ctx.restore();
+
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 60px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('Part 2: Jenis-Jenis Enkripsi', 640, 500);
+            ctx.font = 'bold 80px sans-serif';
+            ctx.fillStyle = '#39ff14';
+            ctx.fillText('DES', 640, 600);
+            ctx.font = '30px sans-serif';
+            ctx.fillStyle = '#aaaaaa';
+            ctx.fillText('@random.ai.id', 640, 660);
+        }
+
+        function drawScene1(ctx, t) {
+            drawAzriel(ctx, 640, 400, 1.5, 'wave', t);
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 40px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('AZRIEL', 640, 100);
+            ctx.font = '30px sans-serif';
+            ctx.fillText('@random.ai.id | AI Gabut', 640, 150);
+        }
+
+        function drawScene2(ctx, t) {
+            ctx.strokeStyle = '#00ff41';
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(200, 360);
+            ctx.lineTo(1080, 360);
+            ctx.stroke();
+            
+            const progress = Math.min(1, (t - 20) / 20);
+            const x = 200 + progress * 880;
+            ctx.fillStyle = '#39ff14';
+            ctx.beginPath();
+            ctx.arc(x, 360, 10, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 50px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('1970-an', 640, 200);
+            
+            if (t > 25) {
+                ctx.font = '40px sans-serif';
+                ctx.fillText('IBM', 400, 300);
+            }
+            if (t > 30) {
+                ctx.fillText('Horst Feistel', 880, 300);
+            }
+            if (t > 35) {
+                ctx.font = 'bold 60px sans-serif';
+                ctx.fillStyle = '#39ff14';
+                ctx.fillText('Lucifer', 640, 500);
+            }
+            drawSmallAzriel(ctx, 120, 550);
+        }
+
+        function drawScene3(ctx, t) {
+            ctx.fillStyle = '#111111';
+            ctx.strokeStyle = '#00ff41';
+            ctx.lineWidth = 4;
+            ctx.fillRect(440, 150, 400, 500);
+            ctx.strokeRect(440, 150, 400, 500);
+            
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 40px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('FIPS PUB 46', 640, 250);
+            ctx.font = '30px sans-serif';
+            ctx.fillText('Januari 1977', 640, 300);
+            
+            if (t > 50) {
+                ctx.fillStyle = '#ff4444';
+                ctx.font = 'bold 35px sans-serif';
+                ctx.fillText('NBS + NSA', 640, 400);
+            }
+            if (t > 55) {
+                ctx.fillStyle = '#ffaa00';
+                ctx.fillText('Kontroversi Kunci', 640, 550);
+            }
+            drawSmallAzriel(ctx, 120, 550);
+        }
+
+        function drawScene4(ctx, t) {
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 40px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('Block: 64 bit', 640, 150);
+            
+            ctx.fillStyle = '#0d1f0d';
+            ctx.strokeStyle = '#00ff41';
+            ctx.lineWidth = 4;
+            ctx.fillRect(340, 200, 600, 100);
+            ctx.strokeRect(340, 200, 600, 100);
+            ctx.beginPath();
+            ctx.moveTo(640, 200);
+            ctx.lineTo(640, 300);
+            ctx.stroke();
+            ctx.fillStyle = '#39ff14';
+            ctx.font = '30px sans-serif';
+            ctx.fillText('32 bit', 490, 260);
+            ctx.fillText('32 bit', 790, 260);
+            
+            if (t > 75) {
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 40px sans-serif';
+                ctx.fillText('Key: 64 bit', 640, 400);
+                ctx.font = '30px sans-serif';
+                ctx.fillStyle = '#aaaaaa';
+                ctx.fillText('Efektif: 56 bit | 8 bit parity dibuang', 640, 450);
+            }
+            drawSmallAzriel(ctx, 120, 550);
+        }
+
+        function drawScene5(ctx, t) {
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 40px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('Feistel Network', 640, 100);
+            ctx.font = '30px sans-serif';
+            ctx.fillText('16 rounds | Kiri ⇄ Kanan | Fungsi F + XOR', 640, 150);
+            
+            const round = Math.floor((t - 95) / 1.8) % 16;
+            ctx.fillStyle = '#0d1f0d';
+            ctx.strokeStyle = '#00ff41';
+            ctx.lineWidth = 3;
+            
+            ctx.fillRect(300, 250, 200, 80);
+            ctx.strokeRect(300, 250, 200, 80);
+            ctx.fillRect(780, 250, 200, 80);
+            ctx.strokeRect(780, 250, 200, 80);
+            
+            ctx.fillStyle = '#39ff14';
+            ctx.font = '30px sans-serif';
+            ctx.fillText('L' + round, 400, 300);
+            ctx.fillText('R' + round, 880, 300);
+            
+            ctx.fillStyle = '#111111';
+            ctx.beginPath();
+            ctx.arc(640, 450, 50, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 40px sans-serif';
+            ctx.fillText('F', 640, 465);
+            
+            ctx.beginPath();
+            ctx.arc(400, 550, 30, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.font = '20px sans-serif';
+            ctx.fillText('XOR', 400, 555);
+            drawSmallAzriel(ctx, 120, 550);
+        }
+
+        function drawScene6(ctx, t) {
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 50px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('56-bit Key', 640, 200);
+            
+            ctx.fillStyle = '#ff4444';
+            ctx.font = 'bold 40px sans-serif';
+            ctx.fillText('Terlalu Pendek!', 640, 300);
+            
+            ctx.fillStyle = '#0d1f0d';
+            ctx.strokeStyle = '#39ff14';
+            ctx.lineWidth = 4;
+            ctx.fillRect(440, 400, 400, 150);
+            ctx.strokeRect(440, 400, 400, 150);
+            ctx.fillStyle = '#39ff14';
+            ctx.font = 'bold 30px sans-serif';
+            ctx.fillText('GPU Brute Force', 640, 485);
+            drawSmallAzriel(ctx, 120, 550);
+        }
+
+        function drawScene7(ctx, t) {
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 40px sans-serif';
+            ctx.textAlign = 'center';
+            
+            if (t < 158) {
+                ctx.fillText('1997: DESCHALL', 640, 300);
+            } else if (t < 166) {
+                ctx.fillText('1998: Deep Crack (56 jam)', 640, 300);
+            } else {
+                ctx.fillText('1999: 22 jam 15 menit', 640, 300);
+                ctx.fillStyle = '#ff4444';
+                ctx.font = 'bold 50px sans-serif';
+                ctx.fillText('CRACKED!', 640, 450);
+            }
+            drawSmallAzriel(ctx, 120, 550);
+        }
+
+        function drawScene8(ctx, t) {
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 50px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('3DES → AES', 640, 250);
+            
+            ctx.fillStyle = '#00ff41';
+            ctx.font = '40px sans-serif';
+            ctx.fillText('NIST tarik DES', 640, 400);
+            
+            ctx.fillStyle = '#ffaa00';
+            ctx.font = 'bold 60px sans-serif';
+            ctx.fillText('2005', 640, 550);
+            drawSmallAzriel(ctx, 120, 550);
+        }
+
+        function drawScene9(ctx, t) {
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 50px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('Legacy DES', 640, 150);
+            ctx.font = '35px sans-serif';
+            ctx.fillText('Fondasi Block Cipher Modern', 640, 220);
+            
+            drawAzriel(ctx, 640, 500, 1.2, 'idle', t);
+        }
+
+        function drawScene10(ctx, t) {
+            drawAzriel(ctx, 640, 400, 1.5, 'thumbsup', t);
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 40px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('Follow @random.ai.id', 640, 150);
+            ctx.font = '30px sans-serif';
+            ctx.fillText('AI Gabut | Part 2 - DES', 640, 200);
+        }
+
+        function drawFrame(t) {
+            ctx.clearRect(0, 0, 1280, 720);
+            ctx.fillStyle = '#0a0a0a';
+            ctx.fillRect(0, 0, 1280, 720);
+            
+            if (t < 3) drawScene0(ctx, t);
+            else if (t < 20) drawScene1(ctx, t);
+            else if (t < 45) drawScene2(ctx, t);
+            else if (t < 65) drawScene3(ctx, t);
+            else if (t < 95) drawScene4(ctx, t);
+            else if (t < 125) drawScene5(ctx, t);
+            else if (t < 150) drawScene6(ctx, t);
+            else if (t < 175) drawScene7(ctx, t);
+            else if (t < 200) drawScene8(ctx, t);
+            else if (t < 225) drawScene9(ctx, t);
+            else drawScene10(ctx, t);
+            
+            drawWatermarks(ctx);
+        }
+
+        window.renderFrame = function(t) {
+            drawFrame(t);
+        };
+
+        let startTime = null;
+        function animate(timestamp) {
+            if (!startTime) startTime = timestamp;
+            const t = (timestamp - startTime) / 1000;
+            if (t < 240) {
+                drawFrame(t);
+                requestAnimationFrame(animate);
+            }
+        }
+        requestAnimationFrame(animate);
+    </script>
+</body>
+</html>
