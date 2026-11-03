@@ -1,15 +1,10 @@
-<table>
-  <tr>
-    <td align="center">
-      <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="MIT License" height="32">
-    </td>
-    <td>
-      <strong>MIT License</strong><br>
-      <sub>Copyright (c) 2025 Nama Kamu</sub><br>
-      <sub>Permission is hereby granted, free of charge, to any person obtaining a copy...</sub>
-    </td>
-  </tr>
-</table>
+## 📄 License
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
+
+Copyright (c) 2025 **azriel**
 
 # GitHub JavaScript Content Renderer
 
