@@ -1,1478 +1,1254 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>DES Animation — AI Gabut Part 2</title>
-
-<!-- Font: fontsource CDN (Inter untuk judul, JetBrains Mono untuk teks teknis) -->
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/inter@5.0.18/latin-400.css">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/inter@5.0.18/latin-700.css">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/inter@5.0.18/latin-800.css">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/jetbrains-mono@5.0.18/latin-400.css">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/jetbrains-mono@5.0.18/latin-700.css">
-
-<style>
-  html,body{
-    margin:0; padding:0; background:#02050a;
-    display:flex; align-items:center; justify-content:center;
-    min-height:100vh; overflow:hidden;
-  }
-  #stage{
-    width:1280px; height:720px; position:relative;
-    box-shadow:0 0 80px rgba(0,229,255,.08), 0 0 200px rgba(57,255,20,.05);
-  }
-  canvas{ display:block; width:1280px; height:720px; background:#050a0e; }
-  #hint{
-    position:fixed; bottom:10px; left:50%; transform:translateX(-50%);
-    font-family:'JetBrains Mono',monospace; font-size:11px; color:rgba(224,232,240,.25);
-    letter-spacing:2px; user-select:none; pointer-events:none;
-  }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cyber Security Part 3 - AES Animation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        html, body {
+            width: 1280px;
+            height: 720px;
+            overflow: hidden;
+            background: #070B14;
+            cursor: none;
+        }
+        
+        #stage {
+            display: block;
+            width: 1280px;
+            height: 720px;
+        }
+    </style>
 </head>
 <body>
-<div id="stage"><canvas id="c" width="1280" height="720"></canvas></div>
-<div id="hint">// DES RENDERER — SPACE: PLAY/PAUSE · ←/→: SEEK 1S</div>
-
-<script>
-"use strict";
-/* ═══════════════════════════════════════════════════════════════
-   DES ANIMATION RENDERER — Cyber Security Motion Graphics
-   Canvas 1280x720 · 30 FPS · 240 detik · Deterministik penuh
-   API publik: window.renderFrame(t)  → render frame pada detik t
-   ═══════════════════════════════════════════════════════════════ */
-
-const W = 1280, H = 720, FPS = 30, TOTAL = 240;
-const canvas = document.getElementById('c');
-const CTX = canvas.getContext('2d', { alpha: false });
-
-/* ─── PALET WARNA (konsisten di seluruh scene) ─── */
-const COL = {
-  bgTop:   '#050a0e',
-  bgBot:   '#0a1520',
-  green:   '#39ff14',
-  green2:  '#00ff41',
-  cyan:    '#00e5ff',
-  amber:   '#ffaa00',
-  red:     '#ff3355',
-  text:    '#e0e8f0',
-  dim:     '#7a8a99',
-  panel:   'rgba(8,20,28,0.82)'
-};
-const FONT_M  = "'JetBrains Mono','Courier New',monospace";
-const FONT_T  = "'Inter','Segoe UI',sans-serif";
-
-/* ─── CACHE GRADIEN & PATTERN (dibuat sekali, bukan per frame) ─── */
-const G = {};
-function grad(key, build){ if(!G[key]) G[key] = build(); return G[key]; }
-
-/* ═══════════════════════ MATEMATIKA & EASING ═══════════════════════ */
-
-// Hash deterministik 0..1 dari seed integer (pengganti Math.random)
-function hash(n){
-  const s = Math.sin(n * 12.9898) * 43758.5453;
-  return s - Math.floor(s);
-}
-function clamp01(v){ return v < 0 ? 0 : (v > 1 ? 1 : v); }
-function lerp(a,b,t){ return a + (b-a)*t; }
-function easeInOutCubic(t){ t=clamp01(t); return t<0.5 ? 4*t*t*t : 1-Math.pow(-2*t+2,3)/2; }
-function easeOutCubic(t){ t=clamp01(t); return 1-Math.pow(1-t,3); }
-function easeInCubic(t){ t=clamp01(t); return t*t*t; }
-function easeOutQuad(t){ t=clamp01(t); return 1-(1-t)*(1-t); }
-function easeOutBack(t){ t=clamp01(t); const c1=1.70158,c3=c1+1; return 1+c3*Math.pow(t-1,3)+c1*Math.pow(t-1,2); }
-function easeOutElastic(t){
-  t=clamp01(t); if(t===0||t===1) return t;
-  return Math.pow(2,-10*t)*Math.sin((t*10-0.75)*(2*Math.PI/3))+1;
-}
-
-// Animasi "masuk" 0→1 (eased) antara start..start+dur
-function animIn(t, start, dur){ return easeInOutCubic(clamp01((t-start)/(dur||0.4))); }
-// Animasi "keluar" 1→0 antara end-dur..end
-function animOut(t, end, dur){ return easeInOutCubic(clamp01((end-t)/(dur||0.3))); }
-// Gabungan in+out → alpha elemen
-function animInOut(t, start, end, inDur, outDur){
-  return Math.min(animIn(t,start,inDur||0.4), animOut(t,end,outDur||0.3));
-}
-// Typewriter: mengembalikan substring berdasarkan waktu (cps = karakter/detik)
-function typewriter(text, t, start, cps){
-  const n = Math.max(0, Math.floor((t-start)*(cps||18)));
-  return text.substring(0, Math.min(n, text.length));
-}
-// Scale punch: membesar lalu menetap (untuk elemen yang "muncul meninju")
-function punch(t, start, dur){
-  const p = clamp01((t-start)/(dur||0.45));
-  return p===0 ? 0 : easeOutBack(p);
-}
-// Counter angka deterministik from→to
-function counter(t, start, dur, from, to){
-  return Math.round(lerp(from, to, easeInOutCubic(clamp01((t-start)/(dur||1)))));
-}
-// Format nomor 2 digit
-function pad2(n){ return (n<10?'0':'')+n; }
-
-/* ═══════════════════ DEFINISI SCENE (11 scene) ═══════════════════ */
-const SCENES = [
-  { id:0,  start:0,   end:3,   name:'INTRO HOOK'      },
-  { id:1,  start:3,   end:20,  name:'INTRO KARAKTER'  },
-  { id:2,  start:20,  end:45,  name:'SEJARAH 1970s'   },
-  { id:3,  start:45,  end:65,  name:'FIPS PUB 46'     },
-  { id:4,  start:65,  end:95,  name:'BLOK & KUNCI'    },
-  { id:5,  start:95,  end:150, name:'FEISTEL NETWORK' },
-  { id:6,  start:150, end:175, name:'KUNCI LEMAH'     },
-  { id:7,  start:175, end:200, name:'TIMELINE RETAS'  },
-  { id:8,  start:200, end:225, name:'3DES → AES'      },
-  { id:9,  start:225, end:240, name:'CLOSING'         },
-  { id:10, start:240, end:249, name:'OUTRO'           }
-];
-function getScene(t){
-  for(let i=SCENES.length-1;i>=0;i--){ if(t >= SCENES[i].start) return SCENES[i]; }
-  return SCENES[0];
-}
-
-/* ═════════════════════ PRIMITIF GAMBAR / TEKS ═════════════════════ */
-
-// letter-spacing aman (didukung Chromium, di-fallback diam-diam)
-function setLS(ctx, v){ try{ ctx.letterSpacing = v+'px'; }catch(e){} }
-
-// Teks dengan glow neon opsional
-function glowText(ctx, str, x, y, font, color, glow, alpha, align, ls){
-  ctx.save();
-  ctx.globalAlpha = alpha===undefined?1:alpha;
-  ctx.font = font; ctx.fillStyle = color;
-  ctx.textAlign = align||'left'; ctx.textBaseline = 'alphabetic';
-  setLS(ctx, ls||0);
-  if(glow){ ctx.shadowColor = glow; ctx.shadowBlur = 18; }
-  ctx.fillText(str, x, y);
-  if(glow){ ctx.fillText(str, x, y); } // dobel pass → glow lebih padat
-  ctx.restore();
-}
-
-// Teks dengan chromatic aberration (offset merah/biru) — gaya sinematik
-function chromaText(ctx, str, x, y, font, color, amount, alpha, align){
-  ctx.save();
-  ctx.globalAlpha = alpha; ctx.font = font; ctx.textAlign = align||'center';
-  ctx.globalCompositeOperation = 'lighter';
-  ctx.fillStyle = 'rgba(255,40,70,0.55)';  ctx.fillText(str, x-amount, y);
-  ctx.fillStyle = 'rgba(40,140,255,0.55)'; ctx.fillText(str, x+amount, y);
-  ctx.globalCompositeOperation = 'source-over';
-  ctx.fillStyle = color; ctx.shadowColor = color; ctx.shadowBlur = 24;
-  ctx.fillText(str, x, y);
-  ctx.restore();
-}
-
-// Panel terminal dengan header three-dots
-function termPanel(ctx, x, y, w, h, alpha, title){
-  ctx.save();
-  ctx.globalAlpha = alpha;
-  ctx.fillStyle = COL.panel;
-  ctx.strokeStyle = 'rgba(57,255,20,0.45)';
-  ctx.lineWidth = 1.5;
-  ctx.shadowColor = 'rgba(57,255,20,0.25)'; ctx.shadowBlur = 14;
-  roundRect(ctx, x, y, w, h, 8); ctx.fill(); ctx.shadowBlur=0; ctx.stroke();
-  // header bar
-  ctx.fillStyle = 'rgba(57,255,20,0.08)';
-  roundRectTop(ctx, x, y, w, 30, 8); ctx.fill();
-  ctx.strokeStyle = 'rgba(57,255,20,0.25)';
-  ctx.beginPath(); ctx.moveTo(x, y+30); ctx.lineTo(x+w, y+30); ctx.stroke();
-  // three dots ●●○
-  const dots = [COL.red, COL.amber, COL.green2];
-  for(let i=0;i<3;i++){
-    ctx.beginPath(); ctx.arc(x+18+i*18, y+15, 4.5, 0, Math.PI*2);
-    ctx.fillStyle = i<2 ? dots[i] : 'rgba(57,255,20,0.25)'; ctx.fill();
-  }
-  if(title){
-    ctx.font = '11px '+FONT_M; ctx.fillStyle = 'rgba(0,229,255,0.7)';
-    ctx.textAlign='left'; setLS(ctx,2); ctx.fillText(title, x+80, y+19); setLS(ctx,0);
-  }
-  ctx.restore();
-}
-function roundRect(ctx,x,y,w,h,r){
-  ctx.beginPath();
-  ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
-  ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
-}
-function roundRectTop(ctx,x,y,w,h,r){
-  ctx.beginPath();
-  ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.lineTo(x+w,y+h);
-  ctx.lineTo(x,y+h); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
-}
-
-/* ═══════════════════════ LAYER BACKGROUND ═══════════════════════ */
-
-// Matrix rain — kolom statis, posisi Y fungsi murni dari t (deterministik)
-function drawMatrixRain(ctx, t, density){
-  const cell = 16;
-  const cols = Math.ceil(W/cell);
-  ctx.save();
-  ctx.font = '13px '+FONT_M;
-  ctx.textAlign = 'center';
-  for(let i=0;i<cols;i++){
-    // hanya sebagian kolom aktif (density) — deterministik
-    if(hash(i*3.77) > density) continue;
-    const speed  = 26 + hash(i*7.13)*70;          // px per detik
-    const offset = hash(i*11.31)*900;
-    const trail  = 7 + Math.floor(hash(i*5.9)*5); // panjang ekor
-    const headY  = (offset + t*speed) % (H + trail*cell + 200) - trail*cell - 100;
-    const hx = i*cell + cell/2;
-    for(let k=0;k<trail;k++){
-      const cy = headY + k*cell;
-      if(cy < -cell || cy > H+cell) continue;
-      const cellIdx = Math.floor(cy/cell);
-      const r = hash(i*13.7 + cellIdx*7.77);
-      const ch = String.fromCharCode(0x30A0 + Math.floor(r*90)); // katakana
-      const fade = 1 - k/trail;
-      ctx.fillStyle = k===0
-        ? 'rgba(120,255,160,'+(0.22*fade).toFixed(3)+')'
-        : 'rgba(57,255,20,'+(0.13*fade).toFixed(3)+')';
-      ctx.fillText(ch, hx, cy);
-    }
-  }
-  ctx.restore();
-}
-
-// Grid perspektif tipis (horizontal + vertikal, opacity 3-5%)
-function drawGrid(ctx, t){
-  ctx.save();
-  ctx.lineWidth = 1;
-  // garis vertikal
-  ctx.strokeStyle = 'rgba(0,229,255,0.035)';
-  ctx.beginPath();
-  for(let x=0;x<=W;x+=40){ ctx.moveTo(x+0.5,0); ctx.lineTo(x+0.5,H); }
-  ctx.stroke();
-  // garis horizontal — makin rapat ke atas (kesan perspektif)
-  ctx.strokeStyle = 'rgba(0,229,255,0.04)';
-  ctx.beginPath();
-  for(let i=0;i<=18;i++){
-    const y = H - Math.pow(i/18, 1.6)*H;
-    ctx.moveTo(0, y+0.5); ctx.lineTo(W, y+0.5);
-  }
-  ctx.stroke();
-  ctx.restore();
-}
-
-// Particle field — 50 partikel melayang, posisi fungsi murni dari t
-function drawParticles(ctx, t){
-  ctx.save();
-  for(let i=0;i<50;i++){
-    const x = (i*137.5 + t*15) % W;
-    const y = (i*89.3  + t*8 + Math.sin(t*0.7+i)*14 + H) % H;
-    const r = 0.6 + hash(i*3.3)*1.6;
-    const a = 0.06 + hash(i*9.1)*0.16 + Math.sin(t*2+i*1.7)*0.04;
-    ctx.fillStyle = i%5===0
-      ? 'rgba(0,229,255,'+a.toFixed(3)+')'
-      : 'rgba(57,255,20,'+(a*0.7).toFixed(3)+')';
-    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fill();
-  }
-  ctx.restore();
-}
-
-// Scanline horizontal halus — menyapu atas→bawah tiap 6 detik
-function drawScanline(ctx, t){
-  const p = (t % 6) / 6;
-  const y = p * (H+160) - 80;
-  const g = grad('scan', () => {
-    const gg = CTX.createLinearGradient(0,-40,0,40);
-    gg.addColorStop(0,'rgba(0,229,255,0)');
-    gg.addColorStop(0.5,'rgba(0,229,255,0.05)');
-    gg.addColorStop(1,'rgba(0,229,255,0)');
-    return gg;
-  });
-  ctx.save(); ctx.translate(0,y); ctx.fillStyle = g;
-  ctx.fillRect(0,-40,W,80); ctx.restore();
-}
-
-// Vignette gelap di empat sisi
-function drawVignette(ctx){
-  const g = grad('vig', () => {
-    const gg = CTX.createRadialGradient(W/2,H/2,H*0.42, W/2,H/2,H*0.95);
-    gg.addColorStop(0,'rgba(0,0,0,0)');
-    gg.addColorStop(1,'rgba(0,0,0,0.55)');
-    return gg;
-  });
-  ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
-}
-
-// Noise/grain halus — pattern precomputed (bukan random per frame)
-function drawNoise(ctx, t){
-  if(!G.noisePat){
-    const nc = document.createElement('canvas'); nc.width=nc.height=96;
-    const nx = nc.getContext('2d');
-    const img = nx.createImageData(96,96);
-    for(let i=0;i<96*96;i++){
-      const v = Math.floor(hash(i*1.7)*255);
-      img.data[i*4]=v; img.data[i*4+1]=v; img.data[i*4+2]=v;
-      img.data[i*4+3]=Math.floor(hash(i*2.3)*26); // alpha rendah
-    }
-    nx.putImageData(img,0,0);
-    G.noisePat = CTX.createPattern(nc,'repeat');
-  }
-  ctx.save();
-  // geser pattern per 3 frame → grain "hidup" tapi tetap deterministik
-  const step = Math.floor(t*10)%4;
-  ctx.translate(step*24, step*24);
-  ctx.fillStyle = G.noisePat;
-  ctx.fillRect(-48,-48,W+96,H+96);
-  ctx.restore();
-}
-
-// Background utama — dipanggil di awal setiap frame
-function drawBackground(ctx, t, rainDensity){
-  // gradient dasar gelap #050a0e → #0a1520
-  const g = grad('bg', () => {
-    const gg = CTX.createLinearGradient(0,0,0,H);
-    gg.addColorStop(0, COL.bgTop);
-    gg.addColorStop(0.55,'#071019');
-    gg.addColorStop(1, COL.bgBot);
-    return gg;
-  });
-  ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
-  drawMatrixRain(ctx, t, rainDensity===undefined?0.5:rainDensity);
-  drawGrid(ctx, t);
-  drawParticles(ctx, t);
-  drawScanline(ctx, t);
-  drawVignette(ctx);
-  drawNoise(ctx, t);
-}
-
-/* ═════════════════ ELEMEN DEKORATIF CYBER (HUD) ═════════════════ */
-
-// Corner brackets di 4 sudut canvas
-function drawCornerBrackets(ctx, t){
-  const L = 42, m = 22, pulse = 0.75 + Math.sin(t*2)*0.25;
-  ctx.save();
-  ctx.strokeStyle = 'rgba(0,229,255,'+(0.35*pulse).toFixed(3)+')';
-  ctx.lineWidth = 2; ctx.shadowColor='rgba(0,229,255,0.4)'; ctx.shadowBlur=6;
-  const corners = [[m,m,1,1],[W-m,m,-1,1],[m,H-m,1,-1],[W-m,H-m,-1,-1]];
-  for(const c of corners){
-    ctx.beginPath();
-    ctx.moveTo(c[0]+c[2]*L, c[1]);
-    ctx.lineTo(c[0], c[1]);
-    ctx.lineTo(c[0], c[1]+c[3]*L);
-    ctx.stroke();
-  }
-  ctx.restore();
-}
-
-// Kode hex deterministik di tepi kiri/kanan
-function drawEdgeHex(ctx, t){
-  ctx.save();
-  ctx.font = '9px '+FONT_M; ctx.fillStyle = 'rgba(0,229,255,0.09)';
-  const tick = Math.floor(t*3); // berganti 3x/detik tapi deterministik
-  for(let row=0; row<22; row++){
-    const y = 70 + row*28;
-    let h1='', h2='';
-    for(let k=0;k<4;k++){
-      h1 += Math.floor(hash(row*31+k*7+tick)*256).toString(16).padStart(2,'0').toUpperCase()+' ';
-      h2 += Math.floor(hash(row*57+k*13+tick+999)*256).toString(16).padStart(2,'0').toUpperCase()+' ';
-    }
-    ctx.textAlign='left';  ctx.fillText(h1, 16, y);
-    ctx.textAlign='right'; ctx.fillText(h2, W-16, y);
-  }
-  ctx.restore();
-}
-
-// HUD: nomor scene gaya terminal + kursor berkedip
-function drawHud(ctx, t, s){
-  if(s.id===0 || s.id===10) return; // scene intro/outro tanpa HUD scene
-  const blink = (Math.sin(t*6)>0) ? 1 : 0;
-  const label = '// SCENE '+pad2(s.id)+' / 11';
-  ctx.save();
-  ctx.font = '12px '+FONT_M; setLS(ctx,2);
-  ctx.textAlign='left';
-  ctx.fillStyle='rgba(57,255,20,0.55)';
-  ctx.fillText(label, 60, 46);
-  const wTxt = ctx.measureText(label).width;
-  ctx.fillStyle='rgba(0,229,255,'+(0.6*blink)+')';
-  ctx.fillRect(60+wTxt+8, 38, 7, 11); // kursor blok berkedip
-  ctx.fillStyle='rgba(224,232,240,0.25)';
-  ctx.fillText('['+s.name+']', 60+wTxt+28, 46);
-  setLS(ctx,0); ctx.restore();
-}
-
-// Progress bar tipis di dasar canvas (0-100% dari 240s)
-function drawProgressBar(ctx, t){
-  const p = clamp01(t/TOTAL);
-  const y = H-4, hgt = 3;
-  ctx.save();
-  ctx.fillStyle='rgba(224,232,240,0.06)';
-  ctx.fillRect(0,y,W,hgt);
-  const g = grad('prog', () => {
-    const gg = CTX.createLinearGradient(0,0,W,0);
-    gg.addColorStop(0, COL.green2); gg.addColorStop(1, COL.cyan);
-    return gg;
-  });
-  ctx.fillStyle=g; ctx.shadowColor='rgba(57,255,20,0.6)'; ctx.shadowBlur=6;
-  ctx.fillRect(0,y,W*p,hgt);
-  // penanda posisi
-  ctx.fillStyle='rgba(224,232,240,0.8)';
-  ctx.fillRect(W*p-1, y-2, 2, hgt+4);
-  ctx.restore();
-}
-
-/* ═══════════════════ WATERMARK (REDESIGN HALUS) ═══════════════════ */
-function drawWatermarks(ctx, t){
-  ctx.save();
-  // Kiri atas: "{ AZRIEL }" opacity 35%
-  ctx.font='700 12px '+FONT_M; setLS(ctx,3); ctx.textAlign='left';
-  ctx.fillStyle='rgba(57,255,20,0.35)';
-  ctx.fillText('{ AZRIEL }', 60, 24);
-  // Kanan atas: "AI Gabut // Part 02" opacity 25%
-  ctx.textAlign='right'; ctx.fillStyle='rgba(224,232,240,0.25)';
-  ctx.fillText('AI Gabut // Part 02', W-60, 24);
-  // Kanan bawah: "AXION Neuralis" + underline gradient, opacity 20%
-  ctx.fillStyle='rgba(0,229,255,0.2)';
-  ctx.font='11px '+FONT_M;
-  ctx.fillText('AXION Neuralis', W-60, H-22);
-  const wu = ctx.measureText('AXION Neuralis').width;
-  const ug = grad('wm', () => {
-    const gg=CTX.createLinearGradient(W-60-wu,0,W-60,0);
-    gg.addColorStop(0,'rgba(57,255,20,0)'); gg.addColorStop(1,'rgba(0,229,255,0.35)');
-    return gg;
-  });
-  ctx.fillStyle=ug; ctx.fillRect(W-60-wu, H-18, wu, 1);
-  // Kiri bawah: indikator REC ● merah berkedip pelan
-  const recA = 0.25 + 0.15*Math.sin(t*3.2);
-  ctx.beginPath(); ctx.arc(66, H-26, 4, 0, Math.PI*2);
-  ctx.fillStyle='rgba(255,51,85,'+recA.toFixed(3)+')';
-  ctx.shadowColor='rgba(255,51,85,0.6)'; ctx.shadowBlur=6; ctx.fill();
-  ctx.shadowBlur=0;
-  ctx.textAlign='left'; ctx.fillStyle='rgba(255,51,85,'+(recA+0.05).toFixed(3)+')';
-  ctx.font='10px '+FONT_M; setLS(ctx,2);
-  ctx.fillText('REC', 76, H-22);
-  setLS(ctx,0); ctx.restore();
-}
-
-/* ═══════════════ KARAKTER AZRIEL (layered + rim light) ═══════════════
-   action: 'idle' | 'wave' | 'thumbsup'
-   Posisi (x,y) = titik tengah kaki. Semua animasi fungsi murni dari t. */
-function drawAzriel(ctx, x, y, scale, action, t){
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.scale(scale, scale);
-
-  // sway ringan keseluruhan badan
-  ctx.rotate(Math.sin(t*0.9)*0.012);
-
-  // napas: skala Y dada 1.00–1.02
-  const breathe = 1 + (Math.sin(t*2.2)*0.5+0.5)*0.02;
-  // blink periodik ~3.6 detik, tertutup 0.14s
-  const bPhase = t % 3.6;
-  const eyeOpen = bPhase < 0.14 ? Math.abs(Math.cos(bPhase/0.14*Math.PI/2))*0+ (1-Math.sin(bPhase/0.14*Math.PI)) : 1;
-  const blinkK = bPhase < 0.14 ? Math.sin(bPhase/0.14*Math.PI) : 0; // 0=open 1=closed
-
-  // bayangan lantai
-  ctx.fillStyle='rgba(0,0,0,0.4)';
-  ctx.beginPath(); ctx.ellipse(0,6,58,9,0,0,Math.PI*2); ctx.fill();
-  // glow lantai neon
-  ctx.fillStyle='rgba(57,255,20,0.05)';
-  ctx.beginPath(); ctx.ellipse(0,6,74,12,0,0,Math.PI*2); ctx.fill();
-
-  const rimG = grad('rimG', () => {
-    const gg=CTX.createLinearGradient(-60,0,60,0);
-    gg.addColorStop(0,'rgba(57,255,20,0.65)'); gg.addColorStop(1,'rgba(0,229,255,0.05)');
-    return gg;
-  });
-  const rimC = grad('rimC', () => {
-    const gg=CTX.createLinearGradient(-60,0,60,0);
-    gg.addColorStop(0,'rgba(57,255,20,0.05)'); gg.addColorStop(1,'rgba(0,229,255,0.65)');
-    return gg;
-  });
-
-  ctx.lineJoin='round'; ctx.lineCap='round';
-
-  /* ── KAKI (celana pendek → betis → sepatu) ── */
-  const skinDark='#5c4a3d', skinLit='#7a6350';
-  // betis
-  for(const sx of [-1,1]){
-    ctx.fillStyle = sx<0 ? skinDark : skinLit;
-    roundRect(ctx, sx*24-8, -74, 16, 68, 7); ctx.fill();
-    ctx.strokeStyle = sx<0 ? rimG : rimC; ctx.lineWidth=1.2; ctx.stroke();
-    // sepatu
-    ctx.fillStyle='#0d141c';
-    roundRect(ctx, sx*24-12, -12, 26, 12, 5); ctx.fill();
-    ctx.strokeStyle='rgba(0,229,255,0.5)'; ctx.lineWidth=1.2; ctx.stroke();
-    ctx.fillStyle='rgba(57,255,20,0.5)';
-    ctx.fillRect(sx*24-10, -4, 22, 1.6);
-  }
-  // celana pendek
-  const shortsG = grad('shorts', () => {
-    const gg=CTX.createLinearGradient(0,-116,0,-66);
-    gg.addColorStop(0,'#1b2a38'); gg.addColorStop(1,'#101a24');
-    return gg;
-  });
-  ctx.fillStyle=shortsG;
-  ctx.beginPath();
-  ctx.moveTo(-34,-116); ctx.lineTo(34,-116); ctx.lineTo(30,-66); ctx.lineTo(6,-66);
-  ctx.lineTo(0,-84); ctx.lineTo(-6,-66); ctx.lineTo(-30,-66); ctx.closePath();
-  ctx.fill();
-  ctx.strokeStyle=rimC; ctx.lineWidth=1.4; ctx.stroke();
-
-  /* ── TORSO (kemeja) dengan napas ── */
-  ctx.save();
-  ctx.translate(0,-110); ctx.scale(1, breathe); ctx.translate(0,110);
-  const shirtG = grad('shirt', () => {
-    const gg=CTX.createLinearGradient(-46,-208,46,-108);
-    gg.addColorStop(0,'#0c2230'); gg.addColorStop(0.5,'#0e2a36'); gg.addColorStop(1,'#081820');
-    return gg;
-  });
-  ctx.fillStyle=shirtG;
-  ctx.beginPath();
-  ctx.moveTo(-44,-200); ctx.quadraticCurveTo(-50,-150,-40,-108);
-  ctx.lineTo(40,-108); ctx.quadraticCurveTo(50,-150,44,-200);
-  ctx.quadraticCurveTo(0,-216,-44,-200); ctx.closePath();
-  ctx.fill();
-  // rim light kiri hijau, kanan cyan
-  ctx.strokeStyle=rimG; ctx.lineWidth=1.6;
-  ctx.shadowColor='rgba(57,255,20,0.5)'; ctx.shadowBlur=8;
-  ctx.beginPath(); ctx.moveTo(-44,-200); ctx.quadraticCurveTo(-50,-150,-40,-108); ctx.stroke();
-  ctx.shadowColor='rgba(0,229,255,0.5)';
-  ctx.strokeStyle=rimC;
-  ctx.beginPath(); ctx.moveTo(44,-200); ctx.quadraticCurveTo(50,-150,40,-108); ctx.stroke();
-  ctx.shadowBlur=0;
-  // kerah V + plaket kemeja
-  ctx.strokeStyle='rgba(0,229,255,0.4)'; ctx.lineWidth=1.4;
-  ctx.beginPath(); ctx.moveTo(-14,-204); ctx.lineTo(0,-186); ctx.lineTo(14,-204); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(0,-186); ctx.lineTo(0,-110); ctx.stroke();
-  // saku + glow strip
-  ctx.strokeStyle='rgba(57,255,20,0.3)';
-  ctx.strokeRect(14,-170,18,14);
-  ctx.fillStyle='rgba(57,255,20,'+(0.3+0.25*Math.sin(t*3)).toFixed(3)+')';
-  ctx.fillRect(-30,-150,4,14);
-  ctx.restore();
-
-  /* ── LENGAN ── */
-  const shoulderY=-198;
-  // lengan kiri (penonton) — selalu turun santai
-  ctx.strokeStyle=skinDark; ctx.lineWidth=13;
-  ctx.beginPath(); ctx.moveTo(-44,shoulderY+6);
-  ctx.quadraticCurveTo(-56,-160,-50,-124); ctx.stroke();
-  ctx.strokeStyle='rgba(57,255,20,0.35)'; ctx.lineWidth=1.2;
-  ctx.beginPath(); ctx.moveTo(-49,shoulderY+6);
-  ctx.quadraticCurveTo(-61,-160,-55,-124); ctx.stroke();
-  ctx.fillStyle=skinDark; ctx.beginPath(); ctx.arc(-50,-120,7.5,0,Math.PI*2); ctx.fill();
-
-  // lengan kanan — tergantung action
-  if(action==='wave'){
-    const ang = -2.35 + Math.sin(t*7.5)*0.28; // oscillasi lambaian
-    ctx.save(); ctx.translate(44,shoulderY+6); ctx.rotate(ang+Math.PI/2);
-    ctx.strokeStyle=skinLit; ctx.lineWidth=13;
-    ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(0,-46); ctx.stroke();
-    ctx.strokeStyle='rgba(0,229,255,0.4)'; ctx.lineWidth=1.2;
-    ctx.beginPath(); ctx.moveTo(5,0); ctx.lineTo(5,-46); ctx.stroke();
-    // telapak terbuka
-    ctx.fillStyle=skinLit; ctx.beginPath(); ctx.arc(0,-54,9,0,Math.PI*2); ctx.fill();
-    ctx.strokeStyle='rgba(0,229,255,0.5)'; ctx.lineWidth=1;
-    for(let f=-1;f<=1;f++){ ctx.beginPath(); ctx.moveTo(f*4,-60); ctx.lineTo(f*5,-68); ctx.stroke(); }
-    ctx.restore();
-  } else if(action==='thumbsup'){
-    ctx.save(); ctx.translate(44,shoulderY+6); ctx.rotate(-0.9);
-    ctx.strokeStyle=skinLit; ctx.lineWidth=13;
-    ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(0,-40); ctx.stroke();
-    // kepalan tangan
-    ctx.fillStyle=skinLit; roundRect(ctx,-10,-58,20,18,6); ctx.fill();
-    ctx.strokeStyle='rgba(0,229,255,0.5)'; ctx.lineWidth=1.2; ctx.stroke();
-    // jempol ke atas
-    ctx.fillStyle=skinLit; roundRect(ctx,-3,-72,7,16,3.5); ctx.fill();
-    ctx.strokeStyle='rgba(57,255,20,0.7)'; ctx.stroke();
-    ctx.restore();
-  } else {
-    ctx.strokeStyle=skinLit; ctx.lineWidth=13;
-    ctx.beginPath(); ctx.moveTo(44,shoulderY+6);
-    ctx.quadraticCurveTo(56,-160,50,-124); ctx.stroke();
-    ctx.strokeStyle='rgba(0,229,255,0.35)'; ctx.lineWidth=1.2;
-    ctx.beginPath(); ctx.moveTo(49,shoulderY+6);
-    ctx.quadraticCurveTo(61,-160,55,-124); ctx.stroke();
-    ctx.fillStyle=skinLit; ctx.beginPath(); ctx.arc(50,-120,7.5,0,Math.PI*2); ctx.fill();
-  }
-
-  /* ── KEPALA ── */
-  const headY=-240, hr=30;
-  // leher
-  ctx.fillStyle=skinDark; ctx.fillRect(-8,headY+hr-4,16,14);
-  // wajah
-  const faceG = grad('face', () => {
-    const gg=CTX.createLinearGradient(-hr,headY,hr,headY);
-    gg.addColorStop(0,'#4e3f33'); gg.addColorStop(1,'#77604c');
-    return gg;
-  });
-  ctx.fillStyle=faceG;
-  ctx.beginPath(); ctx.arc(0,headY,hr,0,Math.PI*2); ctx.fill();
-  // rim light wajah
-  ctx.strokeStyle='rgba(0,229,255,0.5)'; ctx.lineWidth=1.4;
-  ctx.shadowColor='rgba(0,229,255,0.5)'; ctx.shadowBlur=7;
-  ctx.beginPath(); ctx.arc(0,headY,hr, -Math.PI*0.42, Math.PI*0.42); ctx.stroke();
-  ctx.shadowBlur=0;
-  // mata (hanya sisi kanan yang terlihat — kiri tertutup rambut)
-  const eyeX=13, eyeY=headY-2;
-  if(blinkK < 0.5){
-    ctx.fillStyle='#e8f2ff';
-    ctx.beginPath(); ctx.ellipse(eyeX,eyeY,5.2,3.4*(1-blinkK),0,0,Math.PI*2); ctx.fill();
-    ctx.fillStyle='#0a1410';
-    ctx.beginPath(); ctx.arc(eyeX+0.8,eyeY,1.9,0,Math.PI*2); ctx.fill();
-    ctx.fillStyle='rgba(57,255,20,0.8)';
-    ctx.beginPath(); ctx.arc(eyeX+0.2,eyeY-0.8,0.7,0,Math.PI*2); ctx.fill();
-  } else {
-    ctx.strokeStyle='#2a2018'; ctx.lineWidth=1.6;
-    ctx.beginPath(); ctx.moveTo(eyeX-5,eyeY); ctx.lineTo(eyeX+5,eyeY); ctx.stroke();
-  }
-  // alis + mulut kecil
-  ctx.strokeStyle='#241a12'; ctx.lineWidth=2;
-  ctx.beginPath(); ctx.moveTo(eyeX-6,eyeY-8); ctx.lineTo(eyeX+6,eyeY-9); ctx.stroke();
-  ctx.strokeStyle='rgba(30,20,14,0.8)'; ctx.lineWidth=1.6;
-  ctx.beginPath(); ctx.arc(10,headY+13,5,0.15*Math.PI,0.7*Math.PI); ctx.stroke();
-  // rambut: menutup setengah muka (sisi kiri) + spike atas
-  const hairG = grad('hair', () => {
-    const gg=CTX.createLinearGradient(-hr,headY-hr,hr,headY+hr);
-    gg.addColorStop(0,'#0a0f14'); gg.addColorStop(1,'#151d26');
-    return gg;
-  });
-  ctx.fillStyle=hairG;
-  ctx.beginPath();
-  ctx.arc(0,headY,hr+2, Math.PI*0.52, Math.PI*2.06);       // puncak kepala
-  ctx.lineTo(hr*0.35, headY-hr*0.75);
-  ctx.quadraticCurveTo(-4, headY-14, -10, headY+8);         // poni menyilang
-  ctx.quadraticCurveTo(-14, headY+24, -8, headY+hr+16);     // rambut jatuh ke dagu
-  ctx.quadraticCurveTo(-22, headY+hr+10, -hr-1, headY+10);  // tepi luar kiri
-  ctx.closePath(); ctx.fill();
-  // highlight rambut hijau
-  ctx.strokeStyle='rgba(57,255,20,0.4)'; ctx.lineWidth=1.3;
-  ctx.shadowColor='rgba(57,255,20,0.4)'; ctx.shadowBlur=6;
-  ctx.beginPath(); ctx.arc(0,headY,hr+2, Math.PI*1.05, Math.PI*1.62); ctx.stroke();
-  ctx.shadowBlur=0;
-  // anting di telinga kanan (sisi terlihat)
-  ctx.strokeStyle='rgba(0,229,255,0.9)'; ctx.lineWidth=1.6;
-  ctx.shadowColor='rgba(0,229,255,0.8)'; ctx.shadowBlur=6;
-  ctx.beginPath(); ctx.arc(hr-4, headY+10, 3.4, 0, Math.PI*2); ctx.stroke();
-  ctx.shadowBlur=0;
-
-  ctx.restore();
-}
-
-/* ═══════════════ EFEK TRANSISI: GLITCH-CUT ANTAR SCENE ═══════════════ */
-// Dipakai 0.25s di sekitar batas scene: slice bergeser + tint RGB
-function drawGlitchCut(ctx, t){
-  let intensity = 0;
-  for(const s of SCENES){
-    if(s.start<=0) continue;
-    const d = Math.abs(t - s.start);
-    if(d < 0.25) intensity = Math.max(intensity, 1 - d/0.25);
-  }
-  if(intensity <= 0.01) return;
-  const tick = Math.floor(t*60);
-  ctx.save();
-  for(let k=0;k<7;k++){
-    const r1 = hash(tick*1.7+k*13.3), r2 = hash(tick*2.3+k*7.7);
-    if(r1 > intensity*0.9) continue;
-    const sy = Math.floor(r2*H);
-    const sh = 8 + Math.floor(hash(tick+k)*40);
-    const dx = (hash(tick*3.1+k*5.5)-0.5) * 60 * intensity;
-    ctx.drawImage(canvas, 0, sy, W, sh, dx, sy, W, sh);
-  }
-  ctx.globalCompositeOperation='lighter';
-  ctx.fillStyle='rgba(0,229,255,'+(0.05*intensity).toFixed(3)+')';
-  ctx.fillRect(0,0,W,H);
-  ctx.fillStyle='rgba(255,51,85,'+(0.04*intensity).toFixed(3)+')';
-  ctx.fillRect(4*intensity,0,W,H);
-  ctx.restore();
-}
-
-/* ═════════════════════════ SCENE 0 — INTRO HOOK ═════════════════════════ */
-function scene0(ctx, t){
-  ctx.fillStyle='#020408'; ctx.fillRect(0,0,W,H);
-
-  // Glitch burst 0–0.3s
-  if(t < 0.35){
-    const gi = 1 - t/0.35;
-    const tick = Math.floor(t*60);
-    ctx.save();
-    for(let k=0;k<10;k++){
-      const sy = Math.floor(hash(tick+k*3.3)*H), sh = 6+Math.floor(hash(tick*2+k)*36);
-      const dx = (hash(tick*1.3+k*9)-0.5)*120*gi;
-      ctx.drawImage(canvas,0,sy,W,sh,dx,sy,W,sh);
-    }
-    ctx.globalCompositeOperation='lighter';
-    ctx.fillStyle='rgba(57,255,20,'+(0.12*gi)+')'; ctx.fillRect(0,0,W,H);
-    ctx.restore();
-  }
-
-  // Logo kurung kurawal { } "mengetik" dirinya
-  const braceL = typewriter('{', t, 0.4, 8);
-  const braceR = typewriter('}', t, 0.55, 8);
-  const braceA = animIn(t, 0.4, 0.3);
-  glowText(ctx, braceL, W/2-140, H/2-70, '800 120px '+FONT_M, COL.green, 'rgba(57,255,20,0.7)', braceA, 'center');
-  glowText(ctx, braceR, W/2+140, H/2-70, '800 120px '+FONT_M, COL.green, 'rgba(57,255,20,0.7)', braceA, 'center');
-
-  // "DES" glow hijau intens + chromatic aberration
-  const desA = animInOut(t, 0.8, 2.75, 0.3, 0.25);
-  const desS = 0.6 + 0.4*easeOutBack(clamp01((t-0.8)/0.4));
-  if(desA>0){
-    ctx.save(); ctx.translate(W/2,H/2-98); ctx.scale(desS,desS);
-    chromaText(ctx, 'DES', 0, 0, '800 84px '+FONT_T, '#d8ffe0', 3+Math.sin(t*30)*1.5, desA, 'center');
-    ctx.restore();
-  }
-
-  // "Part 2: Jenis-Jenis Enkripsi" — character reveal
-  const p2 = typewriter('Part 2: Jenis-Jenis Enkripsi', t, 1.15, 22);
-  glowText(ctx, p2, W/2, H/2+10, '600 30px '+FONT_T, COL.cyan, 'rgba(0,229,255,0.5)', animIn(t,1.15,0.3), 'center', 4);
-  if(Math.floor((t-1.15)*22) < 28 && Math.sin(t*14)>0){
-    ctx.fillStyle=COL.cyan;
-    const tw = ctx.measureText(p2).width;
-    ctx.font='600 30px '+FONT_T;
-    ctx.fillRect(W/2 + ctx.measureText(p2).width/2 + 4, H/2-14, 12, 26);
-  }
-
-  // handle @random.ai.id fade-in
-  glowText(ctx, '@random.ai.id', W/2, H/2+64, '16px '+FONT_M, COL.text, 'rgba(57,255,20,0.4)', animIn(t,2.0,0.5)*animOut(t,2.75,0.2), 'center', 3);
-
-  // CRT power-off: bar hitam menyempit ke garis tengah (2.7–3.0s)
-  if(t > 2.7){
-    const p = clamp01((t-2.7)/0.3);
-    const band = (1-easeInCubic(p)) * H/2;
-    ctx.fillStyle='#000';
-    ctx.fillRect(0,0,W,H/2-band);
-    ctx.fillRect(0,H/2+band,W,H/2-band+2);
-    if(band < 3){
-      const lw = (1-clamp01((p-0.75)/0.25))*W;
-      ctx.fillStyle='rgba(224,232,240,'+(0.9*(1-p))+')';
-      ctx.shadowColor='#fff'; ctx.shadowBlur=14;
-      ctx.fillRect(W/2-lw/2, H/2-1, lw, 2);
-      ctx.shadowBlur=0;
-    }
-  }
-}
-
-/* ════════════════════ SCENE 1 — INTRO KARAKTER ════════════════════ */
-function scene1(ctx, t){
-  // Karakter masuk dari bawah (ease-out) 3.2–4.2s
-  const enter = easeOutCubic(clamp01((t-3.2)/1.0));
-  const cy = H-40 + (1-enter)*260;
-  drawAzriel(ctx, 300, cy, 1.05, t>=4.6 && t<7.8 ? 'wave' : 'idle', t);
-
-  // Nama AZRIEL neon glow (typewriter)
-  const name = typewriter('AZRIEL', t, 4.0, 9);
-  const nameA = animInOut(t, 4.0, 19.6, 0.3, 0.3);
-  glowText(ctx, name, 560, 250, '800 72px '+FONT_T, '#eaffef', 'rgba(57,255,20,0.65)', nameA, 'left', 8);
-  if(name.length<6 && Math.sin(t*16)>0){
-    ctx.fillStyle=COL.green; ctx.font='800 72px '+FONT_T; setLS(ctx,8);
-    ctx.fillRect(560+ctx.measureText(name).width+8, 200, 20, 58); setLS(ctx,0);
-  }
-  // garis bawah nama
-  const ul = easeInOutCubic(clamp01((t-4.7)/0.6));
-  ctx.strokeStyle='rgba(57,255,20,0.5)'; ctx.lineWidth=2;
-  ctx.shadowColor='rgba(57,255,20,0.6)'; ctx.shadowBlur=8;
-  ctx.beginPath(); ctx.moveTo(560,268); ctx.lineTo(560+ul*340,268); ctx.stroke(); ctx.shadowBlur=0;
-
-  // Subtitle berjalan (marquee) di bawah nama — di-clip
-  const subA = animInOut(t, 5.0, 19.6, 0.4, 0.3);
-  ctx.save();
-  ctx.beginPath(); ctx.rect(560, 284, 620, 34); ctx.clip();
-  ctx.globalAlpha=subA;
-  const marquee = 'CREATIVE TECHNOLOGIST  ///  AI CONTENT CREATOR  ///  SECURITY EXPLAINER SERIES  ///  ';
-  const mx = 560 - ((t-5.0)*70) % (ctx.measureText(marquee).width || 900);
-  ctx.font='16px '+FONT_M; ctx.fillStyle=COL.cyan; setLS(ctx,4);
-  ctx.fillText(marquee+marquee, mx, 308); setLS(ctx,0);
-  ctx.restore();
-
-  // Dialog terminal yang "diketik" karakter
-  const lines = [
-    { s:6.4, txt:'> Halo, gue Azriel.' },
-    { s:8.2, txt:'> Hari ini kita bedah DES — Data Encryption Standard.' },
-    { s:11.0, txt:'> Standar enkripsi yang pernah menjaga dunia...' },
-    { s:13.8, txt:'> ...lalu runtuh karena kuncinya terlalu pendek.' },
-    { s:16.6, txt:'> Siap? Kita mulai dari awal. █' }
-  ];
-  termPanel(ctx, 560, 360, 620, 200, animInOut(t,6.0,19.6,0.5,0.3), 'azriel@terminal — intro.sh');
-  ctx.save();
-  ctx.globalAlpha = animInOut(t,6.0,19.6,0.5,0.3);
-  ctx.font='17px '+FONT_M; ctx.textAlign='left';
-  lines.forEach((ln,i)=>{
-    const txt = typewriter(ln.txt, t, ln.s, 26);
-    if(!txt) return;
-    const isLast = i===lines.length-1;
-    ctx.fillStyle = i===0 ? COL.green : (isLast ? COL.amber : COL.text);
-    ctx.shadowColor = i===0 ? 'rgba(57,255,20,0.5)' : 'transparent';
-    ctx.shadowBlur = i===0 ? 8 : 0;
-    ctx.fillText(txt, 588, 424+i*32);
-  });
-  ctx.restore();
-}
-
-/* ═══════════════════ SCENE 2 — SEJARAH 1970-AN ═══════════════════ */
-function scene2(ctx, t){
-  const sA = animInOut(t, 20, 45, 0.4, 0.35);
-  ctx.save(); ctx.globalAlpha = sA;
-
-  // Judul besar "1970-an"
-  const yIn = (1-animIn(t,20.3,0.6))*40;
-  glowText(ctx, '1970-an', W/2, 130+yIn, '800 64px '+FONT_T, '#eaffef', 'rgba(0,229,255,0.55)', animIn(t,20.3,0.6), 'center', 6);
-  glowText(ctx, 'AWAL MULA DES', W/2, 168+yIn, '15px '+FONT_M, COL.cyan, null, animIn(t,20.7,0.5), 'center', 8);
-
-  // Timeline horizontal — progress ease-in-out + scan glow
-  const TL = { x0:140, x1:1140, y:400 };
-  const prog = easeInOutCubic(clamp01((t-21.2)/3.2));
-  const tg = grad('tl', () => {
-    const gg=CTX.createLinearGradient(TL.x0,0,TL.x1,0);
-    gg.addColorStop(0,'rgba(57,255,20,0.15)'); gg.addColorStop(0.5,'rgba(57,255,20,0.8)'); gg.addColorStop(1,'rgba(0,229,255,0.9)');
-    return gg;
-  });
-  ctx.strokeStyle='rgba(224,232,240,0.08)'; ctx.lineWidth=3;
-  ctx.beginPath(); ctx.moveTo(TL.x0,TL.y); ctx.lineTo(TL.x1,TL.y); ctx.stroke();
-  ctx.strokeStyle=tg; ctx.lineWidth=3;
-  ctx.shadowColor='rgba(57,255,20,0.6)'; ctx.shadowBlur=10;
-  ctx.beginPath(); ctx.moveTo(TL.x0,TL.y); ctx.lineTo(lerp(TL.x0,TL.x1,prog),TL.y); ctx.stroke();
-  ctx.shadowBlur=0;
-  // titik "scan" di ujung progress
-  if(prog<1){
-    const hx=lerp(TL.x0,TL.x1,prog);
-    ctx.fillStyle='#fff'; ctx.shadowColor=COL.green; ctx.shadowBlur=16;
-    ctx.beginPath(); ctx.arc(hx,TL.y,5,0,Math.PI*2); ctx.fill(); ctx.shadowBlur=0;
-  }
-
-  // Node milestone — fade + slide up + scale punch
-  const nodes = [
-    { t0:24.0, x:300,  title:'IBM',            sub:'Riset kriptografi komersial',      col:COL.cyan  },
-    { t0:27.5, x:640,  title:'Horst Feistel',  sub:'Arsitek cipher Lucifer',           col:COL.green },
-    { t0:31.0, x:980,  title:'"LUCIFER"',      sub:'Cikal bakal DES — key 128 bit',    col:COL.amber }
-  ];
-  nodes.forEach((n,i)=>{
-    const a = animInOut(t, n.t0, 44.6, 0.5, 0.3);
-    if(a<=0) return;
-    const rise = (1-easeOutCubic(clamp01((t-n.t0)/0.55)))*46;
-    const sc = n.t0<=t ? (0.7+0.3*punch(t,n.t0,0.5)) : 1;
-    ctx.save(); ctx.globalAlpha *= a;
-    // node di timeline
-    ctx.translate(n.x, TL.y);
-    ctx.scale(sc,sc);
-    ctx.fillStyle='#050a0e'; ctx.strokeStyle=n.col; ctx.lineWidth=2.5;
-    ctx.shadowColor=n.col; ctx.shadowBlur=14;
-    ctx.beginPath(); ctx.arc(0,0,9,0,Math.PI*2); ctx.fill(); ctx.stroke();
-    ctx.fillStyle=n.col; ctx.beginPath(); ctx.arc(0,0,3.5,0,Math.PI*2); ctx.fill();
-    ctx.shadowBlur=0; ctx.scale(1/sc,1/sc);
-    // garis penghubung ke kartu
-    ctx.strokeStyle='rgba(224,232,240,0.15)'; ctx.lineWidth=1;
-    ctx.setLineDash([4,4]);
-    ctx.beginPath(); ctx.moveTo(0,-12); ctx.lineTo(0,-60-rise*0.3); ctx.stroke();
-    ctx.setLineDash([]);
-    // kartu info di atas
-    ctx.translate(0, -60-rise);
-    ctx.fillStyle=COL.panel; ctx.strokeStyle=n.col.replace(')',',0.4)').replace('#','rgba(');
-    // fallback stroke sederhana:
-    ctx.strokeStyle='rgba(0,229,255,0.3)'; ctx.lineWidth=1;
-    roundRect(ctx,-130,-86,260,86,8); ctx.fill(); ctx.stroke();
-    ctx.textAlign='center';
-    ctx.font='700 24px '+FONT_T; ctx.fillStyle=n.col;
-    ctx.shadowColor=n.col; ctx.shadowBlur=12;
-    ctx.fillText(n.title, 0, -50); ctx.shadowBlur=0;
-    ctx.font='13px '+FONT_M; ctx.fillStyle=COL.text;
-    ctx.fillText(n.sub, 0, -22);
-    ctx.restore();
-  });
-
-  // Catatan kaki
-  const note = typewriter('Lucifer dipakai terbatas... hingga pemerintah AS ikut turun tangan.', t, 35, 20);
-  glowText(ctx, note, W/2, 560, '16px '+FONT_M, COL.dim, null, animInOut(t,35,44.6,0.4,0.3), 'center', 1);
-
-  ctx.restore();
-}
-
-/* ═══════════════════ SCENE 3 — FIPS PUB 46 ═══════════════════ */
-function scene3(ctx, t){
-  const sA = animInOut(t, 45, 65, 0.4, 0.35);
-  ctx.save(); ctx.globalAlpha = sA;
-
-  // Judul
-  glowText(ctx, 'STANDARISASI RESMI', W/2, 110+(1-animIn(t,45.2,0.5))*30,
-    '800 44px '+FONT_T, '#eaffef', 'rgba(0,229,255,0.5)', animIn(t,45.2,0.5), 'center', 6);
-
-  // Kartu dokumen terminal — masuk dari kanan
-  const slide = (1-easeOutCubic(clamp01((t-45.6)/0.8)))*500;
-  const px = 240+slide, py = 160, pw = 800, ph = 400;
-  termPanel(ctx, px, py, pw, ph, 1, 'NIST://fips-pub-46.doc — CLASSIFIED');
-
-  ctx.save();
-  ctx.beginPath(); ctx.rect(px, py+30, pw, ph-30); ctx.clip();
-  ctx.textAlign='left'; ctx.font='18px '+FONT_M;
-
-  // Baris dokumen "diketik" satu per satu
-  const rows = [
-    { s:47.0, txt:'DOKUMEN   : FIPS PUB 46',              col:COL.green },
-    { s:48.6, txt:'JUDUL     : Data Encryption Standard', col:COL.text  },
-    { s:50.2, txt:'TERBIT    : Januari 1977',             col:COL.cyan  },
-    { s:51.8, txt:'STATUS    : Standar Federal AS',       col:COL.text  },
-    { s:53.6, txt:'ALGORITMA : Feistel Cipher, 16 ronde', col:COL.text  },
-  ];
-  rows.forEach((r,i)=>{
-    const txt = typewriter(r.txt, t, r.s, 22);
-    if(!txt) return;
-    ctx.fillStyle=r.col;
-    ctx.shadowColor = r.col===COL.green ? 'rgba(57,255,20,0.5)' : 'transparent';
-    ctx.shadowBlur = r.col===COL.green ? 8 : 0;
-    ctx.fillText(txt, px+40, py+86+i*40);
-  });
-  // kursor kedip mengikuti baris terakhir yang sedang diketik
-  const lastRow = rows.filter(r=>t>=r.s).length;
-  if(lastRow>0 && lastRow<=rows.length){
-    const r = rows[lastRow-1];
-    const done = t > r.s + r.txt.length/22;
-    if(!done && Math.sin(t*14)>0){
-      ctx.fillStyle=COL.green;
-      ctx.font='18px '+FONT_M;
-      const wdt = ctx.measureText(typewriter(r.txt,t,r.s,22)).width;
-      ctx.fillRect(px+40+wdt+3, py+72+ (lastRow-1)*40, 10, 18);
-    }
-  }
-
-  // "NBS + NSA" merah dengan glitch 0.2s
-  if(t > 56.2){
-    const ga = animInOut(t, 56.2, 64.6, 0.15, 0.3);
-    const gt = clamp01((t-56.2)/0.2); // fase glitch
-    const jx = gt<1 ? (hash(Math.floor(t*40))-0.5)*10*(1-gt) : 0;
-    ctx.save(); ctx.globalAlpha*=ga; ctx.translate(jx,0);
-    ctx.font='700 26px '+FONT_M; ctx.fillStyle=COL.red;
-    ctx.shadowColor='rgba(255,51,85,0.7)'; ctx.shadowBlur=16;
-    ctx.fillText('» DIRANCANG: NBS + NSA', px+40, py+306);
-    if(gt<1){ // sobekan glitch RGB
-      ctx.globalCompositeOperation='lighter';
-      ctx.fillStyle='rgba(0,229,255,0.5)';
-      ctx.fillText('» DIRANCANG: NBS + NSA', px+40+3*(1-gt), py+306);
-    }
-    ctx.restore();
-  }
-  // "⚠ Kontroversi Kunci" amber berkedip
-  if(t > 59.2){
-    const blink = 0.55 + 0.45*Math.sin(t*7);
-    const aa = animInOut(t, 59.2, 64.6, 0.3, 0.3)*blink;
-    ctx.save(); ctx.globalAlpha*=aa;
-    ctx.font='700 22px '+FONT_M; ctx.fillStyle=COL.amber;
-    ctx.shadowColor='rgba(255,170,0,0.7)'; ctx.shadowBlur=14;
-    ctx.fillText('⚠ KONTROVERSI: panjang kunci dipangkas NSA', px+40, py+356);
-    ctx.restore();
-  }
-  ctx.restore();
-
-  // stempel "APPROVED" miring
-  const stA = animInOut(t, 61.5, 64.6, 0.25, 0.3);
-  if(stA>0){
-    ctx.save();
-    ctx.globalAlpha*=stA*0.85;
-    ctx.translate(px+pw-130, py+120); ctx.rotate(-0.32);
-    const sc = 0.6+0.4*easeOutBack(clamp01((t-61.5)/0.3));
-    ctx.scale(sc,sc);
-    ctx.strokeStyle=COL.red; ctx.lineWidth=3;
-    ctx.strokeRect(-80,-28,160,56);
-    ctx.font='700 26px '+FONT_M; ctx.fillStyle=COL.red;
-    ctx.textAlign='center'; ctx.fillText('APPROVED', 0, 10);
-    ctx.restore();
-  }
-  ctx.restore();
-}
-
-/* ═══════════════════ SCENE 4 — BLOK 64-BIT & KUNCI ═══════════════════ */
-function scene4(ctx, t){
-  const sA = animInOut(t, 65, 95, 0.4, 0.35);
-  ctx.save(); ctx.globalAlpha = sA;
-
-  glowText(ctx, 'BLOK 64-BIT & KUNCI', W/2, 120+(1-animIn(t,65.2,0.5))*30,
-    '800 48px '+FONT_T, '#eaffef', 'rgba(57,255,20,0.5)', animIn(t,65.2,0.5), 'center', 4);
-  glowText(ctx, 'PLAINTEXT MASUK → DIPECAH JADI DUA PARUH', W/2, 156,
-    '14px '+FONT_M, COL.cyan, null, animIn(t,65.6,0.5), 'center', 5);
-
-  /* ── Bar chart 64 sel: bit mengalir dari kiri ke kanan ── */
-  const cells=64, cw=14, gap=3, bw=cells*(cw+gap)-gap;
-  const bx=(W-bw)/2, by=240;
-  const fillN = easeInOutCubic(clamp01((t-67)/6)) * cells;
-  for(let i=0;i<cells;i++){
-    const x = bx+i*(cw+gap);
-    const isL = i<32;
-    const filled = i < fillN;
-    const pulse = filled ? (0.75+0.25*Math.sin(t*4 - i*0.35)) : 0;
-    ctx.fillStyle = filled
-      ? (isL ? 'rgba(57,255,20,'+pulse+')' : 'rgba(0,229,255,'+pulse+')')
-      : 'rgba(224,232,240,0.05)';
-    if(filled){ ctx.shadowColor = isL?COL.green:COL.cyan; ctx.shadowBlur=6; }
-    roundRect(ctx, x, by, cw, 64, 3); ctx.fill();
-    ctx.shadowBlur=0;
-    if(!filled){ ctx.strokeStyle='rgba(224,232,240,0.12)'; ctx.lineWidth=1; ctx.stroke(); }
-  }
-  // label L0 / R0
-  const lblA = animIn(t, 70.5, 0.5);
-  glowText(ctx,'L0  ·  32 bit', bx+bw*0.25, by+100, '700 20px '+FONT_M, COL.green, 'rgba(57,255,20,0.5)', lblA, 'center', 2);
-  glowText(ctx,'R0  ·  32 bit', bx+bw*0.75, by+100, '700 20px '+FONT_M, COL.cyan, 'rgba(0,229,255,0.5)', lblA, 'center', 2);
-
-  // garis pemisah diagonal glow di tengah (32|32)
-  const divA = animIn(t, 71.5, 0.4);
-  ctx.save(); ctx.globalAlpha*=divA;
-  const sx = bx+32*(cw+gap)-gap/2;
-  ctx.strokeStyle=COL.amber; ctx.lineWidth=2;
-  ctx.shadowColor='rgba(255,170,0,0.8)'; ctx.shadowBlur=12;
-  ctx.beginPath(); ctx.moveTo(sx+8, by-14); ctx.lineTo(sx-8, by+78); ctx.stroke();
-  ctx.shadowBlur=0;
-  ctx.font='700 14px '+FONT_M; ctx.fillStyle=COL.amber; ctx.textAlign='center';
-  ctx.fillText('32 | 32', sx, by-24);
-  ctx.restore();
-  // label 64 bit
-  glowText(ctx, '64 bit', bx+bw/2, by-30, '700 22px '+FONT_M, COL.text, null, animIn(t,68.5,0.4), 'center', 3);
-
-  /* ── Key: counter 0 → 64 ── */
-  const keyA = animInOut(t, 75, 94.6, 0.5, 0.3);
-  ctx.save(); ctx.globalAlpha*=keyA;
-  const keyN = counter(t, 75.5, 3, 0, 64);
-  ctx.textAlign='center';
-  ctx.font='700 34px '+FONT_M; ctx.fillStyle=COL.green;
-  ctx.shadowColor='rgba(57,255,20,0.6)'; ctx.shadowBlur=16;
-  ctx.fillText('KEY : '+keyN+' bit', W/2, 470);
-  ctx.shadowBlur=0;
-  // strip visual kunci 16 kotak
-  const kbw=480, kx=(W-kbw)/2;
-  for(let i=0;i<16;i++){
-    const on = i < keyN/4;
-    ctx.fillStyle = on ? 'rgba(57,255,20,'+(0.6+0.3*Math.sin(t*5-i*0.5))+')' : 'rgba(224,232,240,0.05)';
-    roundRect(ctx, kx+i*(kbw/16)+2, 490, kbw/16-4, 14, 2); ctx.fill();
-  }
-  ctx.restore();
-
-  /* ── Sub-baris amber: 56 bit efektif ── */
-  const subA = animInOut(t, 80.5, 94.6, 0.5, 0.3);
-  const rise = (1-easeOutCubic(clamp01((t-80.5)/0.6)))*30;
-  glowText(ctx, '⚠ Efektif: 56 bit  |  8 bit parity dibuang', W/2, 570+rise,
-    '700 26px '+FONT_M, COL.amber, 'rgba(255,170,0,0.6)', subA, 'center', 2);
-  glowText(ctx, 'Inilah celah yang kelak membunuh DES.', W/2, 612+rise,
-    '15px '+FONT_M, COL.dim, null, subA*0.9, 'center', 1);
-
-  ctx.restore();
-}
-
-/* ═══════════════════ SCENE 5 — FEISTEL NETWORK ═══════════════════ */
-function scene5(ctx, t){
-  const sA = animInOut(t, 95, 150, 0.4, 0.35);
-  ctx.save(); ctx.globalAlpha = sA;
-
-  glowText(ctx, 'FEISTEL NETWORK', W/2, 110+(1-animIn(t,95.2,0.5))*30,
-    '800 46px '+FONT_T, '#eaffef', 'rgba(0,229,255,0.5)', animIn(t,95.2,0.5), 'center', 6);
-  glowText(ctx, '16 RONDE PUTARAN — STRUKTUR YANG DIULANG', W/2, 146,
-    '14px '+FONT_M, COL.cyan, null, animIn(t,95.6,0.5), 'center', 5);
-
-  /* ── Diagram L / R ── */
-  const cy=340, lx=380, rx=760, bw2=150, bh2=70;
-  const dA = animIn(t, 96.2, 0.6);
-  const rise = (1-dA)*40;
-  ctx.save(); ctx.globalAlpha*=dA; ctx.translate(0,rise);
-
-  // kotak L dan R
-  function block(x, label, col){
-    ctx.fillStyle=COL.panel; ctx.strokeStyle=col; ctx.lineWidth=2;
-    ctx.shadowColor=col; ctx.shadowBlur=12;
-    roundRect(ctx, x-bw2/2, cy-bh2/2, bw2, bh2, 10); ctx.fill(); ctx.stroke();
-    ctx.shadowBlur=0;
-    ctx.font='800 34px '+FONT_M; ctx.fillStyle=col; ctx.textAlign='center';
-    ctx.shadowColor=col; ctx.shadowBlur=14;
-    ctx.fillText(label, x, cy+12); ctx.shadowBlur=0;
-  }
-  block(lx, 'L', COL.green);
-  block(rx, 'R', COL.cyan);
-
-  // garis alur dash bergerak (stroke-dasharray animasi)
-  ctx.setLineDash([8,7]); ctx.lineDashOffset = -t*40;
-  ctx.strokeStyle='rgba(224,232,240,0.35)'; ctx.lineWidth=2;
-  ctx.beginPath(); ctx.moveTo(lx, cy-bh2/2-60); ctx.lineTo(lx, cy-bh2/2); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(rx, cy-bh2/2-60); ctx.lineTo(rx, cy-bh2/2); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(lx, cy+bh2/2); ctx.lineTo(lx, cy+bh2/2+60); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(rx, cy+bh2/2); ctx.lineTo(rx, cy+bh2/2+60); ctx.stroke();
-  ctx.setLineDash([]);
-
-  // panah melengkung dinamis R → F → XOR ke L
-  const curv = Math.sin(t*1.6)*8;
-  ctx.strokeStyle='rgba(57,255,20,0.55)'; ctx.lineWidth=2.5;
-  ctx.shadowColor='rgba(57,255,20,0.5)'; ctx.shadowBlur=8;
-  ctx.beginPath();
-  ctx.moveTo(rx-bw2/2, cy);
-  ctx.bezierCurveTo(rx-bw2/2-60, cy+curv, W/2+90, cy-curv, W/2+46, cy);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(W/2-46, cy);
-  ctx.bezierCurveTo(W/2-90, cy+curv, lx+bw2/2+60, cy-curv, lx+bw2/2, cy);
-  ctx.stroke();
-  ctx.shadowBlur=0;
-  // kepala panah
-  ctx.fillStyle='rgba(57,255,20,0.8)';
-  ctx.beginPath(); ctx.moveTo(lx+bw2/2-2,cy); ctx.lineTo(lx+bw2/2+12,cy-6); ctx.lineTo(lx+bw2/2+12,cy+6); ctx.closePath(); ctx.fill();
-
-  // fungsi F di tengah — glow berdenyut
-  const fp = 0.6+0.4*Math.sin(t*3.4);
-  ctx.fillStyle='rgba(20,10,0,0.9)'; ctx.strokeStyle=COL.amber; ctx.lineWidth=2.5;
-  ctx.shadowColor='rgba(255,170,0,'+fp+')'; ctx.shadowBlur=22;
-  ctx.beginPath(); ctx.arc(W/2, cy, 44, 0, Math.PI*2); ctx.fill(); ctx.stroke();
-  ctx.shadowBlur=0;
-  ctx.font='800 40px '+FONT_T; ctx.fillStyle=COL.amber; ctx.textAlign='center';
-  ctx.shadowColor='rgba(255,170,0,0.8)'; ctx.shadowBlur=12;
-  ctx.fillText('F', W/2, cy+14); ctx.shadowBlur=0;
-  glowText(ctx,'f(L, Kᵢ)', W/2, cy+76, '13px '+FONT_M, COL.amber, null, 0.85, 'center', 1);
-
-  // simbol XOR ⊕ berputar halus di jalur keluar kiri
-  ctx.save();
-  ctx.translate(lx+bw2/2+70, cy); ctx.rotate(t*1.2);
-  ctx.strokeStyle=COL.cyan; ctx.lineWidth=2.5;
-  ctx.shadowColor='rgba(0,229,255,0.7)'; ctx.shadowBlur=10;
-  ctx.beginPath(); ctx.arc(0,0,16,0,Math.PI*2); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(-16,0); ctx.lineTo(16,0); ctx.moveTo(0,-16); ctx.lineTo(0,16); ctx.stroke();
-  ctx.shadowBlur=0; ctx.restore();
-  glowText(ctx,'XOR', lx+bw2/2+70, cy+42, '11px '+FONT_M, COL.cyan, null, 0.8, 'center', 2);
-
-  // panah swap bawah (L↔R silang)
-  ctx.strokeStyle='rgba(0,229,255,0.3)'; ctx.lineWidth=1.6;
-  ctx.setLineDash([5,6]); ctx.lineDashOffset = t*30;
-  ctx.beginPath(); ctx.moveTo(lx, cy+bh2/2+60); ctx.bezierCurveTo(lx+120, cy+bh2/2+110, rx-120, cy+bh2/2+110, rx, cy+bh2/2+60); ctx.stroke();
-  ctx.setLineDash([]);
-  glowText(ctx,'swap tiap ronde', W/2, cy+bh2/2+100, '12px '+FONT_M, COL.dim, null, 0.75, 'center', 2);
-  ctx.restore();
-
-  /* ── Round counter + progress ring ── */
-  const rStart=101, rEnd=141;
-  const rp = clamp01((t-rStart)/(rEnd-rStart));
-  const roundIdx = Math.min(16, Math.floor(rp*16)+1);
-  const ringA = animInOut(t, rStart-0.4, 149.6, 0.4, 0.3);
-  ctx.save(); ctx.globalAlpha*=ringA;
-  const rcx=W/2, rcy=590, rr=42;
-  ctx.strokeStyle='rgba(224,232,240,0.1)'; ctx.lineWidth=6;
-  ctx.beginPath(); ctx.arc(rcx,rcy,rr,0,Math.PI*2); ctx.stroke();
-  ctx.strokeStyle=COL.green; ctx.lineWidth=6; ctx.lineCap='round';
-  ctx.shadowColor='rgba(57,255,20,0.7)'; ctx.shadowBlur=12;
-  ctx.beginPath(); ctx.arc(rcx,rcy,rr,-Math.PI/2, -Math.PI/2 + rp*Math.PI*2); ctx.stroke();
-  ctx.shadowBlur=0; ctx.lineCap='butt';
-  ctx.textAlign='center';
-  ctx.font='700 17px '+FONT_M; ctx.fillStyle='#eaffef';
-  ctx.fillText(pad2(roundIdx)+'/16', rcx, rcy+6);
-  glowText(ctx,'ROUND', rcx, rcy-56, '13px '+FONT_M, COL.cyan, null, 0.9, 'center', 4);
-  // subkey berubah tiap ronde
-  const keyHex = (()=>{ let s=''; for(let k=0;k<8;k++) s+=Math.floor(hash(roundIdx*17+k*3)*16).toString(16).toUpperCase(); return s; })();
-  glowText(ctx,'Kᵢ = 0x'+keyHex, rcx+180, rcy+6, '16px '+FONT_M, COL.amber, 'rgba(255,170,0,0.5)', 0.95, 'center', 1);
-  glowText(ctx,'→ kunci ronde berbeda tiap putaran', rcx+180, rcy+32, '12px '+FONT_M, COL.dim, null, 0.7, 'center', 1);
-  ctx.restore();
-
-  ctx.restore();
-}
-
-/* ═══════════════════ SCENE 6 — KUNCI LEMAH ═══════════════════ */
-function scene6(ctx, t){
-  const sA = animInOut(t, 150, 175, 0.4, 0.35);
-  ctx.save(); ctx.globalAlpha = sA;
-
-  // "56-bit Key" → glitch jadi "TERLALU PENDEK!" (shake 0.3s)
-  const flipT = 154.5;
-  const shaking = t>flipT && t<flipT+0.35;
-  const shakeX = shaking ? (hash(Math.floor(t*50))-0.5)*14*(1-(t-flipT)/0.35) : 0;
-  const shakeY = shaking ? (hash(Math.floor(t*50)+9)-0.5)*8*(1-(t-flipT)/0.35) : 0;
-
-  if(t < flipT+0.1){
-    const a1 = animIn(t,150.4,0.5)*clamp01((flipT+0.1-t)/0.2);
-    glowText(ctx, '56-bit Key', W/2+shakeX, 200+shakeY, '800 68px '+FONT_T, '#eaffef', 'rgba(57,255,20,0.6)', a1, 'center', 3);
-  }
-  if(t > flipT-0.05){
-    const a2 = animInOut(t, flipT-0.05, 174.6, 0.2, 0.3);
-    const glitchK = clamp01((t-flipT+0.05)/0.25);
-    if(glitchK<1){
-      chromaText(ctx,'TERLALU PENDEK!', W/2+shakeX, 200+shakeY, '800 68px '+FONT_T, COL.red, 6*(1-glitchK)+2, a2, 'center');
-    } else {
-      glowText(ctx,'TERLALU PENDEK!', W/2+shakeX, 200+shakeY, '800 68px '+FONT_T, COL.red, 'rgba(255,51,85,0.8)', a2, 'center', 3);
-    }
-  }
-  glowText(ctx, '2⁵⁶ = 72.057.594.037.927.936 kemungkinan kunci', W/2, 250,
-    '16px '+FONT_M, COL.dim, null, animInOut(t,152.5,174.6,0.5,0.3), 'center', 1);
-
-  /* ── Visualisasi brute force GPU ── */
-  const bfA = animInOut(t, 157, 174.6, 0.5, 0.3);
-  ctx.save(); ctx.globalAlpha*=bfA;
-  const barX=200, barY=340, barW=880, barH=54;
-  ctx.fillStyle='rgba(224,232,240,0.04)'; ctx.strokeStyle='rgba(255,51,85,0.35)'; ctx.lineWidth=1.5;
-  roundRect(ctx, barX, barY, barW, barH, 8); ctx.fill(); ctx.stroke();
-  // fill bar cepat dengan easing
-  const fp = easeInOutCubic(clamp01((t-157.5)/9));
-  const fg = grad('bf', () => {
-    const gg=CTX.createLinearGradient(barX,0,barX+barW,0);
-    gg.addColorStop(0,'rgba(255,170,0,0.85)'); gg.addColorStop(1,'rgba(255,51,85,0.95)');
-    return gg;
-  });
-  ctx.fillStyle=fg; ctx.shadowColor='rgba(255,51,85,0.6)'; ctx.shadowBlur=14;
-  roundRect(ctx, barX+3, barY+3, Math.max(6,(barW-6)*fp), barH-6, 6); ctx.fill();
-  ctx.shadowBlur=0;
-  // kilatan "scan head"
-  if(fp<1){
-    ctx.fillStyle='rgba(255,255,255,0.85)';
-    ctx.fillRect(barX+3+(barW-6)*fp-2, barY+3, 3, barH-6);
-  }
-  ctx.textAlign='left';
-  glowText(ctx,'GPU BRUTE FORCE', barX, barY-18, '700 18px '+FONT_M, COL.red, 'rgba(255,51,85,0.5)', 1, 'left', 3);
-  ctx.textAlign='right';
-  glowText(ctx, Math.round(fp*100)+'%', barX+barW, barY-18, '700 18px '+FONT_M, COL.amber, null, 1, 'right', 1);
-
-  // counter percobaan deterministik (miliaran kunci/detik)
-  const tried = Math.floor(clamp01((t-157.5)/9) * 72057594037 * (0.35+0.65*easeInOutCubic(clamp01((t-157.5)/9))));
-  const triedStr = tried.toLocaleString('id-ID');
-  glowText(ctx, 'kunci dicoba: '+triedStr, W/2, 450, '20px '+FONT_M, COL.text, null, 1, 'center', 1);
-  glowText(ctx, '~ 90.000.000.000 kunci / detik (farm FPGA 1998)', W/2, 482, '13px '+FONT_M, COL.dim, null, 0.85, 'center', 1);
-
-  // peringatan kecil berkedip
-  if(t>167){
-    const wk = 0.5+0.5*Math.sin(t*8);
-    glowText(ctx,'✖ KEYSPACE RUNTIME — SELESAI DALAM HITUNGAN JAM', W/2, 560,
-      '700 22px '+FONT_M, COL.red, 'rgba(255,51,85,0.6)', animIn(t,167,0.4)*wk*animOut(t,174.6,0.3), 'center', 2);
-  }
-  ctx.restore();
-  ctx.restore();
-}
-
-/* ═══════════════════ SCENE 7 — TIMELINE PERETASAN ═══════════════════ */
-function scene7(ctx, t){
-  const sA = animInOut(t, 175, 200, 0.4, 0.35);
-  ctx.save(); ctx.globalAlpha = sA;
-
-  glowText(ctx, 'SEJARAH KEJATUHAN DES', W/2, 110+(1-animIn(t,175.2,0.5))*30,
-    '800 44px '+FONT_T, '#eaffef', 'rgba(255,51,85,0.4)', animIn(t,175.2,0.5), 'center', 5);
-
-  // sumbu vertikal
-  const axisX=270;
-  const axP = easeInOutCubic(clamp01((t-175.8)/2));
-  const ag = grad('axis', () => {
-    const gg=CTX.createLinearGradient(0,160,0,620);
-    gg.addColorStop(0,'rgba(0,229,255,0.8)'); gg.addColorStop(1,'rgba(255,51,85,0.8)');
-    return gg;
-  });
-  ctx.strokeStyle='rgba(224,232,240,0.07)'; ctx.lineWidth=3;
-  ctx.beginPath(); ctx.moveTo(axisX,160); ctx.lineTo(axisX,620); ctx.stroke();
-  ctx.strokeStyle=ag; ctx.shadowColor='rgba(0,229,255,0.5)'; ctx.shadowBlur=8;
-  ctx.beginPath(); ctx.moveTo(axisX,160); ctx.lineTo(axisX, 160+460*axP); ctx.stroke();
-  ctx.shadowBlur=0;
-
-  const miles = [
-    { t0:177.0, y:220, year:'1997', title:'DESCHALL Project',   time:'96 hari',       note:'Ribuan relawan internet memecahkan DES via brute-force terdistribusi.' },
-    { t0:180.5, y:360, year:'1998', title:'EFF "Deep Crack"',   time:'56 jam',        note:'Mesin US$250.000 buatan EFF meruntuhkan DES dalam 56 jam.' },
-    { t0:184.0, y:500, year:'1999', title:'Deep Crack + RC5',   time:'22 jam 15 mnt', note:'Rekor akhir: kombinasi farm + distributed.net = 22 jam 15 menit.' }
-  ];
-  miles.forEach(m=>{
-    const a = animInOut(t, m.t0, 199.6, 0.5, 0.3);
-    if(a<=0) return;
-    const slide = (1-easeOutCubic(clamp01((t-m.t0)/0.55)))*60;
-    ctx.save(); ctx.globalAlpha*=a; ctx.translate(slide,0);
-    // node
-    ctx.fillStyle='#050a0e'; ctx.strokeStyle=COL.cyan; ctx.lineWidth=2.5;
-    ctx.shadowColor=COL.cyan; ctx.shadowBlur=12;
-    ctx.beginPath(); ctx.arc(axisX, m.y, 8, 0, Math.PI*2); ctx.fill(); ctx.stroke();
-    ctx.shadowBlur=0;
-    // tahun
-    glowText(ctx, m.year, axisX-30, m.y+8, '800 30px '+FONT_T, COL.cyan, 'rgba(0,229,255,0.5)', 1, 'right', 2);
-    // kartu
-    ctx.fillStyle=COL.panel; ctx.strokeStyle='rgba(255,51,85,0.3)'; ctx.lineWidth=1;
-    roundRect(ctx, axisX+40, m.y-52, 700, 104, 8); ctx.fill(); ctx.stroke();
-    ctx.textAlign='left';
-    glowText(ctx, m.title, axisX+68, m.y-16, '700 24px '+FONT_T, '#eaffef', null, 1, 'left', 1);
-    glowText(ctx, '⏱ '+m.time, axisX+68, m.y+16, '700 19px '+FONT_M, COL.amber, 'rgba(255,170,0,0.4)', 1, 'left', 1);
-    ctx.font='13px '+FONT_M; ctx.fillStyle=COL.dim;
-    ctx.fillText(m.note, axisX+68, m.y+40);
-    // strikethrough animasi pada waktu (dicoret setelah 1.5s muncul)
-    const stP = easeInOutCubic(clamp01((t-m.t0-1.6)/0.5));
-    if(stP>0){
-      ctx.font='700 19px '+FONT_M;
-      const wS = ctx.measureText('⏱ '+m.time).width;
-      ctx.strokeStyle=COL.red; ctx.lineWidth=2.5;
-      ctx.shadowColor='rgba(255,51,85,0.8)'; ctx.shadowBlur=6;
-      ctx.beginPath(); ctx.moveTo(axisX+64, m.y+10);
-      ctx.lineTo(axisX+64+wS*stP, m.y+10); ctx.stroke();
-      ctx.shadowBlur=0;
-    }
-    ctx.restore();
-  });
-
-  // "CRACKED!" glitch + chromatic + shake
-  if(t>188.5){
-    const ckA = animInOut(t, 188.5, 199.6, 0.15, 0.3);
-    const ckT = clamp01((t-188.5)/0.35);
-    const shk = ckT<1 ? (1-ckT) : (hash(Math.floor(t*7))*0.06);
-    const jx=(hash(Math.floor(t*31))-0.5)*16*shk, jy=(hash(Math.floor(t*31)+5)-0.5)*10*shk;
-    chromaText(ctx,'C R A C K E D !', W/2+jx, 660+jy, '800 60px '+FONT_T, COL.red, 5*shk+2, ckA, 'center');
-  }
-  ctx.restore();
-}
-
-/* ═══════════════════ SCENE 8 — 3DES → AES ═══════════════════ */
-function scene8(ctx, t){
-  const sA = animInOut(t, 200, 225, 0.4, 0.35);
-  ctx.save(); ctx.globalAlpha = sA;
-
-  glowText(ctx, 'EVOLUSI STANDAR', W/2, 120+(1-animIn(t,200.2,0.5))*30,
-    '800 44px '+FONT_T, '#eaffef', 'rgba(0,229,255,0.5)', animIn(t,200.2,0.5), 'center', 6);
-
-  /* ── "3DES → AES" dengan panah glow beranimasi ── */
-  const hdrA = animIn(t, 201, 0.6);
-  glowText(ctx,'3DES', 400, 260, '800 76px '+FONT_T, COL.cyan, 'rgba(0,229,255,0.6)', hdrA, 'center', 3);
-  glowText(ctx,'AES',  880, 260, '800 76px '+FONT_T, COL.green, 'rgba(57,255,20,0.6)', hdrA, 'center', 3);
-  // panah tumbuh + dash bergerak
-  const arP = easeInOutCubic(clamp01((t-201.8)/1));
-  ctx.save();
-  ctx.strokeStyle=COL.green; ctx.lineWidth=4; ctx.lineCap='round';
-  ctx.shadowColor='rgba(57,255,20,0.8)'; ctx.shadowBlur=14;
-  ctx.beginPath(); ctx.moveTo(500, 238); ctx.lineTo(500+280*arP, 238); ctx.stroke();
-  if(arP>0.95){
-    ctx.beginPath(); ctx.moveTo(790,238); ctx.lineTo(764,222); ctx.lineTo(764,254); ctx.closePath();
-    ctx.fillStyle=COL.green; ctx.fill();
-  }
-  ctx.shadowBlur=0; ctx.restore();
-  // label triple
-  glowText(ctx,'E(K₃,D(K₂,E(K₁,M))) — 3 lapis, 3× lebih lambat', W/2, 310,
-    '15px '+FONT_M, COL.dim, null, animIn(t,203,0.5), 'center', 1);
-
-  // tiga lapisan visual 3DES
-  const layA = animInOut(t, 203.5, 224.6, 0.5, 0.3);
-  ctx.save(); ctx.globalAlpha*=layA;
-  const cols=[COL.green, COL.cyan, COL.amber], labs=['ENCRYPT','DECRYPT','ENCRYPT'];
-  for(let i=0;i<3;i++){
-    const lp = easeOutCubic(clamp01((t-203.8-i*0.35)/0.5));
-    const x = 340+i*220, y = 360+(1-lp)*30;
-    ctx.fillStyle=COL.panel; ctx.strokeStyle=cols[i]; ctx.lineWidth=2;
-    ctx.shadowColor=cols[i]; ctx.shadowBlur=10;
-    roundRect(ctx, x, y, 180, 60, 8); ctx.globalAlpha*=1; ctx.fill(); ctx.stroke();
-    ctx.shadowBlur=0;
-    ctx.font='700 17px '+FONT_M; ctx.fillStyle=cols[i]; ctx.textAlign='center';
-    ctx.fillText(labs[i], x+90, y+28);
-    ctx.font='12px '+FONT_M; ctx.fillStyle=COL.dim;
-    ctx.fillText('key '+(['K1','K2','K3'][i]), x+90, y+48);
-  }
-  ctx.restore();
-
-  // "NIST tarik DES" cyan
-  glowText(ctx,'» NIST resmi menarik status standar DES', W/2, 490,
-    '700 26px '+FONT_M, COL.cyan, 'rgba(0,229,255,0.5)', animInOut(t,207,224.6,0.5,0.3), 'center', 2);
-
-  // "2005" besar amber dengan scale punch
-  const y2005 = punch(t, 211, 0.6);
-  if(y2005>0){
-    ctx.save();
-    ctx.translate(W/2, 590); ctx.scale(y2005, y2005);
-    glowText(ctx,'2005', 0, 0, '800 92px '+FONT_T, COL.amber, 'rgba(255,170,0,0.7)', animInOut(t,211,224.6,0.2,0.3), 'center', 6);
-    ctx.restore();
-    glowText(ctx,'FIPS 46-3 ditarik penuh — era DES berakhir', W/2, 632,
-      '15px '+FONT_M, COL.dim, null, animInOut(t,212,224.6,0.5,0.3), 'center', 1);
-  }
-  ctx.restore();
-}
-
-/* ═══════════════════ SCENE 9 — CLOSING ═══════════════════ */
-function scene9(ctx, t){
-  const sA = animInOut(t, 225, 238.4, 0.5, 0.3);
-  ctx.save(); ctx.globalAlpha = sA;
-
-  // Karakter idle di tengah
-  const enter = easeOutCubic(clamp01((t-225.2)/0.8));
-  drawAzriel(ctx, W/2, H-120+(1-enter)*200, 1.0, 'idle', t);
-
-  // "Legacy DES" lalu "Fondasi Block Cipher Modern" berurutan
-  const l1 = animIn(t, 226.2, 0.7);
-  glowText(ctx,'Legacy DES', W/2, 150+(1-l1)*36, '800 64px '+FONT_T, '#eaffef', 'rgba(57,255,20,0.6)', l1, 'center', 5);
-  const l2 = animIn(t, 228.5, 0.7);
-  glowText(ctx,'Fondasi Block Cipher Modern', W/2, 208+(1-l2)*30, '700 30px '+FONT_T, COL.cyan, 'rgba(0,229,255,0.5)', l2, 'center', 3);
-  const l3 = animIn(t, 230.5, 0.7);
-  glowText(ctx,'Runtuh karena kunci pendek — namun arsitektur Feistel-nya abadi.', W/2, 252,
-    '15px '+FONT_M, COL.dim, null, l3, 'center', 1);
-
-  ctx.restore();
-
-  // fade to black global di akhir (238.4–240)
-  const fo = easeInOutCubic(clamp01((t-238.4)/1.6));
-  if(fo>0){ ctx.fillStyle='rgba(0,0,0,'+fo+')'; ctx.fillRect(0,0,W,H); }
-}
-
-/* ═══════════════════ SCENE 10 — OUTRO (t ≥ 240) ═══════════════════ */
-function scene10(ctx, t){
-  const sA = animInOut(t, 240, 248.4, 0.5, 0.4);
-  ctx.save(); ctx.globalAlpha = sA;
-
-  // Karakter thumbsup
-  drawAzriel(ctx, W/2, H-130, 1.05, 'thumbsup', t);
-
-  // Teks follow + kredit
-  const f1 = animIn(t, 240.6, 0.6);
-  glowText(ctx,'Follow @random.ai.id', W/2, 170+(1-f1)*30, '800 52px '+FONT_T, '#eaffef', 'rgba(57,255,20,0.65)', f1, 'center', 3);
-  const f2 = animIn(t, 241.6, 0.6);
-  glowText(ctx,'AI Gabut  |  Part 2 — DES', W/2, 224+(1-f2)*24, '700 24px '+FONT_M, COL.cyan, 'rgba(0,229,255,0.5)', f2, 'center', 4);
-  const f3 = animIn(t, 242.6, 0.6);
-  glowText(ctx,'Like · Comment · Share  —  sampai jumpa di Part 3: AES', W/2, 262,
-    '14px '+FONT_M, COL.dim, null, f3, 'center', 2);
-
-  ctx.restore();
-  // fade out ke hitam (247–249)
-  const fo = easeInOutCubic(clamp01((t-247)/2));
-  if(fo>0){ ctx.fillStyle='rgba(0,0,0,'+fo+')'; ctx.fillRect(0,0,W,H); }
-}
-
-/* ═══════════════════════ RENDER FRAME UTAMA ═══════════════════════ */
-const SCENE_FNS = [scene0,scene1,scene2,scene3,scene4,scene5,scene6,scene7,scene8,scene9,scene10];
-
-// Kerapatan matrix rain berbeda per scene (scene 1 lebih rapat)
-function rainDensityFor(t){
-  const s = getScene(t);
-  if(s.id===1) return 0.85;
-  if(s.id===0) return 0.15;
-  if(s.id===9 || s.id===10) return 0.35;
-  return 0.5;
-}
-
-/**
- * API PUBLIK — render frame deterministik pada detik `t`.
- * Dipanggil Puppeteer: window.renderFrame(t)
- */
-function renderFrame(t){
-  t = Math.max(0, Math.min(250, t));
-  const ctx = CTX;
-  ctx.setTransform(1,0,0,1,0,0);
-  ctx.globalAlpha = 1;
-  ctx.textBaseline = 'alphabetic';
-
-  // 1. background layer (selalu, di semua scene)
-  drawBackground(ctx, t, rainDensityFor(t));
-
-  // 2. konten scene aktif + transisi alpha
-  const s = getScene(t);
-  const a = Math.min(
-    easeInOutCubic(clamp01((t - s.start)/0.4)),   // fade-in 0.4s
-    easeInOutCubic(clamp01((s.end - t)/0.4))      // fade-out 0.4s
-  );
-  if(a > 0.004){
-    ctx.save();
-    ctx.globalAlpha = a;
-    SCENE_FNS[s.id](ctx, t);
-    ctx.restore();
-  }
-
-  // 3. glitch-cut 0.25s di sekitar batas scene
-  drawGlitchCut(ctx, t);
-
-  // 4. lapisan dekoratif + watermark (paling atas)
-  drawEdgeHex(ctx, t);
-  drawCornerBrackets(ctx, t);
-  drawHud(ctx, t, s);
-  drawWatermarks(ctx, t);
-  drawProgressBar(ctx, t);
-}
-window.renderFrame = renderFrame;
-
-/* ═══════════ MODE PREVIEW BROWSER (non-Puppeteer saja) ═══════════ */
-// Di headless/Puppeteer, autoplay dimatikan — render dikontrol skrip eksternal.
-if(!navigator.webdriver){
-  let playing = true, cur = 0, last = performance.now();
-  const ensureFonts = document.fonts ? document.fonts.ready : Promise.resolve();
-  ensureFonts.then(()=>renderFrame(0));
-  function loop(now){
-    const dt = Math.min(0.1, (now-last)/1000); last = now;
-    if(playing){ cur += dt; if(cur > 249) cur = 0; }
-    renderFrame(cur);
-    requestAnimationFrame(loop);
-  }
-  requestAnimationFrame(loop);
-  window.addEventListener('keydown', e=>{
-    if(e.code==='Space'){ playing=!playing; e.preventDefault(); }
-    if(e.code==='ArrowRight'){ cur=Math.min(249,cur+1); renderFrame(cur); }
-    if(e.code==='ArrowLeft'){ cur=Math.max(0,cur-1); renderFrame(cur); }
-  });
-}
-</script>
+    <canvas id="stage" width="1280" height="720"></canvas>
+    
+    <script>
+        // ============================================================
+        // KONSTANTA DAN KONFIGURASI
+        // ============================================================
+        const CANVAS_WIDTH = 1280;
+        const CANVAS_HEIGHT = 720;
+        const FPS = 30;
+        const TOTAL_DURATION = 240; // detik
+        const TOTAL_FRAMES = TOTAL_DURATION * FPS;
+        
+        // Palet warna
+        const COLORS = {
+            bgDark: '#070B14',
+            navy: '#101A33',
+            cyan: '#35E7FF',
+            green: '#4DFF9B',
+            yellow: '#FFD166',
+            red: '#FF5D73',
+            textLight: '#EAF3FF',
+            clay: '#D4A574',
+            clayDark: '#A67C52',
+            clayLight: '#E8C8A0'
+        };
+        
+        const canvas = document.getElementById('stage');
+        const ctx = canvas.getContext('2d');
+        
+        // ============================================================
+        // FUNGSI UTILITAS DETERMINISTIK
+        // ============================================================
+        
+        // Hash deterministik untuk pseudo-random
+        function hash(index) {
+            return Math.abs(Math.sin(index * 12.9898) * 43758.5453) % 1;
+        }
+        
+        // Easing functions
+        function easeInOutCubic(t) {
+            return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+        }
+        
+        function easeOutCubic(t) {
+            return 1 - Math.pow(1 - t, 3);
+        }
+        
+        function easeOutBack(t) {
+            const c1 = 1.70158;
+            const c3 = c1 + 1;
+            return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
+        }
+        
+        function easeInOutQuad(t) {
+            return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+        }
+        
+        // Interpolasi linear
+        function lerp(a, b, t) {
+            return a + (b - a) * t;
+        }
+        
+        // Clamp nilai
+        function clamp(val, min, max) {
+            return Math.max(min, Math.min(max, val));
+        }
+        
+        // ============================================================
+        // FUNGSI MENGGAMBAR DASAR
+        // ============================================================
+        
+        function drawRoundedRect(x, y, width, height, radius) {
+            ctx.beginPath();
+            ctx.moveTo(x + radius, y);
+            ctx.lineTo(x + width - radius, y);
+            ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+            ctx.lineTo(x + width, y + height - radius);
+            ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+            ctx.lineTo(x + radius, y + height);
+            ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+            ctx.lineTo(x, y + radius);
+            ctx.quadraticCurveTo(x, y, x + radius, y);
+            ctx.closePath();
+        }
+        
+        function drawEllipse(cx, cy, rx, ry) {
+            ctx.beginPath();
+            ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+        }
+        
+        // ============================================================
+        // BACKGROUND DAN EFEK AMBIENT
+        // ============================================================
+        
+        function drawBackground(t, sceneProgress) {
+            // Gradient dasar
+            const gradient = ctx.createRadialGradient(
+                CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2, 100,
+                CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2, 800
+            );
+            gradient.addColorStop(0, '#0F1629');
+            gradient.addColorStop(1, COLORS.bgDark);
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+            
+            // Partikel ambient
+            ctx.save();
+            for (let i = 0; i < 50; i++) {
+                const seed = hash(i);
+                const x = (i * 137.5 + t * 15) % CANVAS_WIDTH;
+                const y = (i * 89.3 + t * 8) % CANVAS_HEIGHT;
+                const size = 1 + seed * 2;
+                const alpha = 0.1 + seed * 0.2;
+                
+                ctx.fillStyle = `rgba(53, 231, 255, ${alpha})`;
+                ctx.beginPath();
+                ctx.arc(x, y, size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.restore();
+            
+            // Vignette
+            const vignette = ctx.createRadialGradient(
+                CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2, 300,
+                CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2, 700
+            );
+            vignette.addColorStop(0, 'rgba(0, 0, 0, 0)');
+            vignette.addColorStop(1, 'rgba(0, 0, 0, 0.4)');
+            ctx.fillStyle = vignette;
+            ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        }
+        
+        // ============================================================
+        // KARAKTER AGUNG
+        // ============================================================
+        
+        function drawAgung(t, x, y, scale = 1, speaking = true, sceneIndex = 0) {
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.scale(scale, scale);
+            
+            // Idle animation - napas dan sway
+            const breathOffset = Math.sin(t * 2) * 2;
+            const swayOffset = Math.sin(t * 1.5) * 3;
+            
+            ctx.translate(swayOffset, breathOffset);
+            
+            // Shadow di bawah
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+            drawEllipse(0, 80, 50, 10);
+            ctx.fill();
+            
+            // Badan (clay)
+            const bodyGradient = ctx.createLinearGradient(-30, -20, 30, 60);
+            bodyGradient.addColorStop(0, COLORS.clayLight);
+            bodyGradient.addColorStop(0.5, COLORS.clay);
+            bodyGradient.addColorStop(1, COLORS.clayDark);
+            
+            ctx.fillStyle = bodyGradient;
+            drawRoundedRect(-35, -20, 70, 100, 15);
+            ctx.fill();
+            
+            // Rim light
+            ctx.strokeStyle = 'rgba(53, 231, 255, 0.3)';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            // Lengan kiri
+            const armWave = Math.sin(t * 2) * 5;
+            ctx.fillStyle = bodyGradient;
+            drawRoundedRect(-50, 0, 20, 60, 10);
+            ctx.fill();
+            
+            // Lengan kanan
+            ctx.save();
+            ctx.translate(50, 20);
+            ctx.rotate(armWave * 0.02);
+            ctx.fillStyle = bodyGradient;
+            drawRoundedRect(-10, -20, 20, 60, 10);
+            ctx.fill();
+            ctx.restore();
+            
+            // Kepala
+            const headGradient = ctx.createRadialGradient(0, -50, 10, 0, -50, 40);
+            headGradient.addColorStop(0, COLORS.clayLight);
+            headGradient.addColorStop(1, COLORS.clay);
+            
+            ctx.fillStyle = headGradient;
+            drawEllipse(0, -50, 35, 35);
+            ctx.fill();
+            
+            // Rim light kepala
+            ctx.strokeStyle = 'rgba(53, 231, 255, 0.4)';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            // Mata
+            const blinkCycle = (t % 3.5) / 3.5;
+            const blinkProgress = blinkCycle < 0.05 ? blinkCycle / 0.05 : blinkCycle < 0.1 ? (0.1 - blinkCycle) / 0.05 : 1;
+            
+            // Mata kiri
+            ctx.fillStyle = '#FFFFFF';
+            drawEllipse(-12, -55, 6, 8 * blinkProgress);
+            ctx.fill();
+            ctx.fillStyle = '#000000';
+            drawEllipse(-12, -55, 3, 4 * blinkProgress);
+            ctx.fill();
+            
+            // Mata kanan
+            ctx.fillStyle = '#FFFFFF';
+            drawEllipse(12, -55, 6, 8 * blinkProgress);
+            ctx.fill();
+            ctx.fillStyle = '#000000';
+            drawEllipse(12, -55, 3, 4 * blinkProgress);
+            ctx.fill();
+            
+            // Mulut dengan animasi bicara
+            let mouthOpenness = 0;
+            if (speaking) {
+                // Envelope bicara berbasis waktu
+                const speakCycle = t % 0.4;
+                mouthOpenness = Math.sin(speakCycle * Math.PI * 2) * 0.5 + 0.5;
+                mouthOpenness *= 0.8;
+            }
+            
+            const mouthY = -35;
+            const mouthWidth = 15;
+            const mouthHeight = 5 + mouthOpenness * 8;
+            
+            ctx.fillStyle = '#8B4513';
+            drawEllipse(0, mouthY, mouthWidth, mouthHeight);
+            ctx.fill();
+            
+            ctx.restore();
+        }
+        
+        // ============================================================
+        // FUNGSI SCENE-SPECIFIC
+        // ============================================================
+        
+        // Scene 1: Pembuka - DES ke AES
+        function drawScene1(t, progress) {
+            const fadeIn = easeOutCubic(clamp(progress * 5, 0, 1));
+            
+            ctx.save();
+            ctx.globalAlpha = fadeIn;
+            
+            // Gembok tua (DES) - fade out
+            const desFadeOut = easeOutCubic(clamp(progress * 3, 0, 1));
+            if (desFadeOut < 0.8) {
+                ctx.save();
+                ctx.globalAlpha = (1 - desFadeOut) * fadeIn;
+                ctx.translate(400, 360);
+                
+                // Gembok berkarat
+                ctx.fillStyle = '#8B7355';
+                drawRoundedRect(-40, -30, 80, 100, 10);
+                ctx.fill();
+                
+                ctx.strokeStyle = '#654321';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+                
+                // Kunci gembok
+                ctx.fillStyle = '#654321';
+                drawRoundedRect(-30, -60, 60, 40, 20);
+                ctx.fill();
+                ctx.stroke();
+                
+                ctx.restore();
+            }
+            
+            // Brankas AES - fade in
+            const aesFadeIn = easeOutCubic(clamp((progress - 0.3) * 3, 0, 1));
+            if (aesFadeIn > 0) {
+                ctx.save();
+                ctx.globalAlpha = aesFadeIn * fadeIn;
+                ctx.translate(800, 360);
+                
+                // Brankas neon
+                const safeGradient = ctx.createLinearGradient(-50, -50, 50, 70);
+                safeGradient.addColorStop(0, '#1a3a52');
+                safeGradient.addColorStop(0.5, '#0f2436');
+                safeGradient.addColorStop(1, '#0a1929');
+                
+                ctx.fillStyle = safeGradient;
+                drawRoundedRect(-50, -50, 100, 120, 8);
+                ctx.fill();
+                
+                // Glow neon
+                ctx.shadowColor = COLORS.cyan;
+                ctx.shadowBlur = 20;
+                ctx.strokeStyle = COLORS.cyan;
+                ctx.lineWidth = 3;
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+                
+                // Handle
+                ctx.fillStyle = '#FFD700';
+                drawEllipse(0, 0, 20, 20);
+                ctx.fill();
+                
+                ctx.restore();
+            }
+            
+            // Agung
+            drawAgung(t, 600, 450, 1.2, true, 1);
+            
+            // Teks
+            if (progress > 0.5) {
+                const textAlpha = easeOutCubic(clamp((progress - 0.5) * 4, 0, 1));
+                ctx.globalAlpha = textAlpha * fadeIn;
+                
+                ctx.fillStyle = COLORS.textLight;
+                ctx.font = 'bold 36px "Segoe UI", sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('PART 2: DES', 640, 150);
+                
+                ctx.fillStyle = COLORS.cyan;
+                ctx.fillText('→ PART 3: AES', 640, 200);
+            }
+            
+            ctx.restore();
+        }
+        
+        // Scene 2: Zoom ke brankas
+        function drawScene2(t, progress) {
+            const fadeIn = easeOutCubic(clamp(progress * 3, 0, 1));
+            const zoomProgress = easeInOutCubic(clamp(progress * 2, 0, 1));
+            
+            ctx.save();
+            ctx.globalAlpha = fadeIn;
+            
+            // Brankas zoom in
+            const scale = 1 + zoomProgress * 2;
+            ctx.save();
+            ctx.translate(640, 360);
+            ctx.scale(scale, scale);
+            
+            const safeGradient = ctx.createLinearGradient(-50, -50, 50, 70);
+            safeGradient.addColorStop(0, '#1a3a52');
+            safeGradient.addColorStop(0.5, '#0f2436');
+            safeGradient.addColorStop(1, '#0a1929');
+            
+            ctx.fillStyle = safeGradient;
+            drawRoundedRect(-50, -50, 100, 120, 8);
+            ctx.fill();
+            
+            ctx.shadowColor = COLORS.cyan;
+            ctx.shadowBlur = 20;
+            ctx.strokeStyle = COLORS.cyan;
+            ctx.lineWidth = 3;
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+            
+            ctx.restore();
+            
+            // Transisi ke gedung-gedung
+            if (progress > 0.5) {
+                const buildingsAlpha = easeOutCubic(clamp((progress - 0.5) * 4, 0, 1));
+                ctx.globalAlpha = buildingsAlpha * fadeIn;
+                
+                // Gedung bank
+                ctx.fillStyle = '#2C3E50';
+                drawRoundedRect(200, 300, 120, 200, 5);
+                ctx.fill();
+                ctx.strokeStyle = COLORS.yellow;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                
+                // Markas militer
+                ctx.fillStyle = '#34495E';
+                drawRoundedRect(400, 280, 140, 220, 5);
+                ctx.fill();
+                ctx.strokeStyle = COLORS.green;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                
+                // Smartphone
+                ctx.fillStyle = '#1a1a1a';
+                drawRoundedRect(800, 320, 80, 160, 15);
+                ctx.fill();
+                ctx.strokeStyle = COLORS.cyan;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                
+                // Layar smartphone
+                ctx.fillStyle = '#0f2436';
+                drawRoundedRect(790, 340, 60, 120, 10);
+                ctx.fill();
+            }
+            
+            // Teks
+            const textAlpha = easeOutCubic(clamp(progress * 2, 0, 1));
+            ctx.globalAlpha = textAlpha * fadeIn;
+            
+            ctx.fillStyle = COLORS.cyan;
+            ctx.font = 'bold 48px "Segoe UI", sans-serif';
+            ctx.textAlign = 'center';
+            ctx.shadowColor = COLORS.cyan;
+            ctx.shadowBlur = 15;
+            ctx.fillText('AES = BRANKAS LEVEL DEWA', 640, 150);
+            ctx.shadowBlur = 0;
+            
+            ctx.restore();
+        }
+        
+        // Scene 3: Pop-up ikon
+        function drawScene3(t, progress) {
+            const fadeIn = easeOutCubic(clamp(progress * 3, 0, 1));
+            
+            ctx.save();
+            ctx.globalAlpha = fadeIn;
+            
+            // Agung menunjuk
+            drawAgung(t, 300, 450, 1.2, true, 3);
+            
+            // Pop-up icons
+            const icons = [
+                { x: 700, y: 300, color: COLORS.yellow, label: 'BANK', delay: 0 },
+                { x: 850, y: 300, color: COLORS.green, label: 'MILITER', delay: 0.2 },
+                { x: 1000, y: 300, color: COLORS.cyan, label: 'CHAT APP', delay: 0.4 }
+            ];
+            
+            icons.forEach((icon, i) => {
+                const iconProgress = easeOutBack(clamp((progress - icon.delay) * 3, 0, 1));
+                if (iconProgress > 0) {
+                    ctx.save();
+                    ctx.globalAlpha = iconProgress * fadeIn;
+                    ctx.translate(icon.x, icon.y);
+                    ctx.scale(iconProgress, iconProgress);
+                    
+                    // Icon background
+                    ctx.fillStyle = icon.color;
+                    drawRoundedRect(-50, -50, 100, 100, 15);
+                    ctx.fill();
+                    
+                    ctx.shadowColor = icon.color;
+                    ctx.shadowBlur = 20;
+                    ctx.strokeStyle = '#FFFFFF';
+                    ctx.lineWidth = 3;
+                    ctx.stroke();
+                    ctx.shadowBlur = 0;
+                    
+                    // Label
+                    ctx.fillStyle = '#000000';
+                    ctx.font = 'bold 16px "Segoe UI", sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(icon.label, 0, 70);
+                    
+                    ctx.restore();
+                }
+            });
+            
+            // Teks utama
+            const textAlpha = easeOutCubic(clamp(progress * 2, 0, 1));
+            ctx.globalAlpha = textAlpha * fadeIn;
+            
+            ctx.fillStyle = COLORS.textLight;
+            ctx.font = 'bold 40px "Segoe UI", sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('BANK | MILITER | CHAT APP', 850, 500);
+            
+            ctx.restore();
+        }
+        
+        // Scene 4: Papan tulis kapur
+        function drawScene4(t, progress) {
+            const fadeIn = easeOutCubic(clamp(progress * 3, 0, 1));
+            
+            ctx.save();
+            ctx.globalAlpha = fadeIn;
+            
+            // Papan tulis
+            const boardGradient = ctx.createLinearGradient(200, 150, 200, 550);
+            boardGradient.addColorStop(0, '#2d4a3e');
+            boardGradient.addColorStop(1, '#1a2f26');
+            
+            ctx.fillStyle = boardGradient;
+            drawRoundedRect(200, 150, 880, 420, 10);
+            ctx.fill();
+            
+            ctx.strokeStyle = '#8B7355';
+            ctx.lineWidth = 8;
+            ctx.stroke();
+            
+            // Teks AES muncul
+            const aesProgress = easeOutCubic(clamp(progress * 2, 0, 1));
+            if (aesProgress > 0) {
+                ctx.globalAlpha = aesProgress * fadeIn;
+                
+                ctx.fillStyle = '#FFFFFF';
+                ctx.font = 'bold 80px "Segoe UI", sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('AES', 640, 280);
+                
+                ctx.font = 'bold 24px "Segoe UI", sans-serif';
+                ctx.fillStyle = COLORS.cyan;
+                ctx.fillText('Advanced Encryption Standard', 640, 330);
+            }
+            
+            // Blok data
+            if (progress > 0.4) {
+                const blocksProgress = easeOutCubic(clamp((progress - 0.4) * 3, 0, 1));
+                ctx.globalAlpha = blocksProgress * fadeIn;
+                
+                for (let i = 0; i < 4; i++) {
+                    const blockX = 400 + i * 80;
+                    ctx.fillStyle = COLORS.cyan;
+                    drawRoundedRect(blockX, 400, 60, 80, 5);
+                    ctx.fill();
+                    
+                    ctx.strokeStyle = '#FFFFFF';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                    
+                    ctx.fillStyle = '#000000';
+                    ctx.font = 'bold 14px "Courier New", monospace';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('128', blockX + 30, 445);
+                }
+                
+                // Label
+                ctx.fillStyle = COLORS.yellow;
+                ctx.font = 'bold 28px "Segoe UI", sans-serif';
+                ctx.fillText('Block Cipher', 640, 520);
+            }
+            
+            ctx.restore();
+        }
+        
+        // Scene 5: Pabrik conveyor
+        function drawScene5(t, progress) {
+            const fadeIn = easeOutCubic(clamp(progress * 3, 0, 1));
+            
+            ctx.save();
+            ctx.globalAlpha = fadeIn;
+            
+            // Conveyor belt
+            ctx.fillStyle = '#2C3E50';
+            drawRoundedRect(100, 450, 1080, 40, 20);
+            ctx.fill();
+            
+            ctx.strokeStyle = '#34495E';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+            
+            // Balok data bergerak
+            const conveyorSpeed = 100;
+            for (let i = 0; i < 8; i++) {
+                const baseX = 150 + i * 140;
+                const blockX = (baseX + t * conveyorSpeed) % 1080;
+                
+                ctx.fillStyle = COLORS.cyan;
+                drawRoundedRect(blockX, 400, 60, 50, 5);
+                ctx.fill();
+                
+                ctx.strokeStyle = '#FFFFFF';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                
+                ctx.fillStyle = '#000000';
+                ctx.font = 'bold 12px "Courier New", monospace';
+                ctx.textAlign = 'center';
+                ctx.fillText('DATA', blockX + 30, 430);
+            }
+            
+            // Stempel 128-bit
+            const stampProgress = easeOutCubic(clamp(progress * 2, 0, 1));
+            if (stampProgress > 0) {
+                ctx.globalAlpha = stampProgress * fadeIn;
+                
+                ctx.fillStyle = COLORS.yellow;
+                drawRoundedRect(600, 200, 120, 80, 10);
+                ctx.fill();
+                
+                ctx.shadowColor = COLORS.yellow;
+                ctx.shadowBlur = 20;
+                ctx.strokeStyle = '#FFFFFF';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+                
+                ctx.fillStyle = '#000000';
+                ctx.font = 'bold 20px "Courier New", monospace';
+                ctx.textAlign = 'center';
+                ctx.fillText('BLOK:', 660, 235);
+                ctx.fillText('128-bit', 660, 265);
+            }
+            
+            // Panel kunci
+            if (progress > 0.3) {
+                const panelProgress = easeOutCubic(clamp((progress - 0.3) * 3, 0, 1));
+                ctx.globalAlpha = panelProgress * fadeIn;
+                
+                ctx.fillStyle = '#1a1a1a';
+                drawRoundedRect(850, 200, 200, 120, 10);
+                ctx.fill();
+                
+                ctx.strokeStyle = COLORS.cyan;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                
+                ctx.fillStyle = COLORS.textLight;
+                ctx.font = 'bold 18px "Courier New", monospace';
+                ctx.textAlign = 'left';
+                ctx.fillText('KUNCI:', 870, 240);
+                
+                const keySizes = ['128-bit', '192-bit', '256-bit'];
+                keySizes.forEach((size, i) => {
+                    const keyY = 270 + i * 25;
+                    ctx.fillStyle = i === 2 ? COLORS.green : COLORS.textLight;
+                    ctx.fillText(size, 870, keyY);
+                });
+            }
+            
+            ctx.restore();
+        }
+        
+        // Scene 6: Dalam brankas
+        function drawScene6(t, progress) {
+            const fadeIn = easeOutCubic(clamp(progress * 3, 0, 1));
+            const rotation = t * 2;
+            
+            ctx.save();
+            ctx.globalAlpha = fadeIn;
+            
+            // Mesin berputar
+            ctx.save();
+            ctx.translate(640, 360);
+            ctx.rotate(rotation);
+            
+            const machineGradient = ctx.createRadialGradient(0, 0, 50, 0, 0, 150);
+            machineGradient.addColorStop(0, COLORS.cyan);
+            machineGradient.addColorStop(1, '#0f2436');
+            
+            ctx.fillStyle = machineGradient;
+            drawEllipse(0, 0, 150, 150);
+            ctx.fill();
+            
+            ctx.strokeStyle = COLORS.cyan;
+            ctx.lineWidth = 3;
+            ctx.stroke();
+            
+            // Gear teeth
+            for (let i = 0; i < 12; i++) {
+                const angle = (i / 12) * Math.PI * 2;
+                const x1 = Math.cos(angle) * 140;
+                const y1 = Math.sin(angle) * 140;
+                const x2 = Math.cos(angle) * 160;
+                const y2 = Math.sin(angle) * 160;
+                
+                ctx.strokeStyle = COLORS.cyan;
+                ctx.lineWidth = 8;
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.stroke();
+            }
+            
+            ctx.restore();
+            
+            // Balok data di tengah
+            ctx.fillStyle = COLORS.yellow;
+            drawRoundedRect(580, 330, 120, 60, 10);
+            ctx.fill();
+            
+            ctx.fillStyle = '#000000';
+            ctx.font = 'bold 16px "Courier New", monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText('DATA', 640, 365);
+            
+            // Counter putaran
+            if (progress > 0.2) {
+                const counterProgress = easeOutCubic(clamp((progress - 0.2) * 3, 0, 1));
+                ctx.globalAlpha = counterProgress * fadeIn;
+                
+                ctx.fillStyle = '#000000';
+                drawRoundedRect(850, 200, 180, 100, 10);
+                ctx.fill();
+                
+                ctx.strokeStyle = COLORS.cyan;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                
+                ctx.fillStyle = COLORS.textLight;
+                ctx.font = 'bold 24px "Courier New", monospace';
+                ctx.textAlign = 'center';
+                ctx.fillText('10-14', 940, 240);
+                ctx.fillText('PUTARAN', 940, 270);
+                ctx.fillText('ACAK', 940, 300);
+            }
+            
+            ctx.restore();
+        }
+        
+        // Scene 7: Meja hacker
+        function drawScene7(t, progress) {
+            const fadeIn = easeOutCubic(clamp(progress * 3, 0, 1));
+            
+            ctx.save();
+            ctx.globalAlpha = fadeIn;
+            
+            // Laptop
+            ctx.fillStyle = '#1a1a1a';
+            drawRoundedRect(400, 350, 240, 150, 10);
+            ctx.fill();
+            
+            // Layar laptop
+            ctx.fillStyle = '#0f2436';
+            drawRoundedRect(420, 370, 200, 110, 5);
+            ctx.fill();
+            
+            // Progress bar
+            const progressWidth = 180 * (0.0000001 + (t % 30) * 0.00000001);
+            ctx.fillStyle = COLORS.red;
+            drawRoundedRect(430, 420, progressWidth, 20, 5);
+            ctx.fill();
+            
+            ctx.fillStyle = COLORS.textLight;
+            ctx.font = 'bold 12px "Courier New", monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText('0.0000001%', 520, 435);
+            
+            // Kalender berputar
+            if (progress > 0.3) {
+                const calendarProgress = easeOutCubic(clamp((progress - 0.3) * 3, 0, 1));
+                ctx.globalAlpha = calendarProgress * fadeIn;
+                
+                ctx.save();
+                ctx.translate(800, 350);
+                
+                const calendarRotation = t * 10;
+                ctx.rotate(Math.sin(calendarRotation) * 0.1);
+                
+                ctx.fillStyle = COLORS.yellow;
+                drawRoundedRect(-60, -40, 120, 80, 10);
+                ctx.fill();
+                
+                ctx.fillStyle = '#000000';
+                ctx.font = 'bold 16px "Courier New", monospace';
+                ctx.textAlign = 'center';
+                ctx.fillText('JUTAAN', 0, -10);
+                ctx.fillText('TAHUN', 0, 15);
+                
+                ctx.restore();
+            }
+            
+            // Teks
+            const textAlpha = easeOutCubic(clamp(progress * 2, 0, 1));
+            ctx.globalAlpha = textAlpha * fadeIn;
+            
+            ctx.fillStyle = COLORS.red;
+            ctx.font = 'bold 48px "Segoe UI", sans-serif';
+            ctx.textAlign = 'center';
+            ctx.shadowColor = COLORS.red;
+            ctx.shadowBlur = 15;
+            ctx.fillText('BRUTE FORCE = MUSTAHIL', 640, 200);
+            ctx.shadowBlur = 0;
+            
+            ctx.restore();
+        }
+        
+        // Scene 8: Coffee shop
+        function drawScene8(t, progress) {
+            const fadeIn = easeOutCubic(clamp(progress * 3, 0, 1));
+            
+            ctx.save();
+            ctx.globalAlpha = fadeIn;
+            
+            // Laptop dengan gembok hijau
+            ctx.fillStyle = '#2C3E50';
+            drawRoundedRect(500, 350, 280, 180, 15);
+            ctx.fill();
+            
+            // Layar
+            ctx.fillStyle = '#0f2436';
+            drawRoundedRect(520, 370, 240, 140, 10);
+            ctx.fill();
+            
+            // Gembok hijau HTTPS
+            const lockProgress = easeOutBack(clamp(progress * 2, 0, 1));
+            if (lockProgress > 0) {
+                ctx.save();
+                ctx.translate(640, 440);
+                ctx.scale(lockProgress, lockProgress);
+                
+                ctx.fillStyle = COLORS.green;
+                drawRoundedRect(-25, -20, 50, 50, 8);
+                ctx.fill();
+                
+                ctx.shadowColor = COLORS.green;
+                ctx.shadowBlur = 20;
+                ctx.strokeStyle = '#FFFFFF';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+                
+                // Kunci gembok
+                ctx.fillStyle = COLORS.green;
+                drawRoundedRect(-20, -40, 40, 25, 12);
+                ctx.fill();
+                ctx.strokeStyle = '#FFFFFF';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+                
+                ctx.restore();
+            }
+            
+            // Perisai
+            if (progress > 0.3) {
+                const shieldProgress = easeOutCubic(clamp((progress - 0.3) * 3, 0, 1));
+                ctx.globalAlpha = shieldProgress * fadeIn * 0.6;
+                
+                ctx.strokeStyle = COLORS.green;
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.arc(640, 440, 100, 0, Math.PI * 2);
+                ctx.stroke();
+                
+                ctx.globalAlpha = shieldProgress * fadeIn;
+            }
+            
+            // Mata-mata terblokir
+            if (progress > 0.5) {
+                const spyProgress = easeOutCubic(clamp((progress - 0.5) * 3, 0, 1));
+                ctx.globalAlpha = spyProgress * fadeIn;
+                
+                ctx.fillStyle = '#34495E';
+                drawEllipse(200, 400, 40, 60);
+                ctx.fill();
+                
+                // X merah
+                ctx.strokeStyle = COLORS.red;
+                ctx.lineWidth = 5;
+                ctx.beginPath();
+                ctx.moveTo(180, 380);
+                ctx.lineTo(220, 420);
+                ctx.moveTo(220, 380);
+                ctx.lineTo(180, 420);
+                ctx.stroke();
+            }
+            
+            // Teks
+            const textAlpha = easeOutCubic(clamp(progress * 2, 0, 1));
+            ctx.globalAlpha = textAlpha * fadeIn;
+            
+            ctx.fillStyle = COLORS.green;
+            ctx.font = 'bold 40px "Segoe UI", sans-serif';
+            ctx.textAlign = 'center';
+            ctx.shadowColor = COLORS.green;
+            ctx.shadowBlur = 15;
+            ctx.fillText('HTTPS = GEMBOK HIJAU', 640, 200);
+            ctx.shadowBlur = 0;
+            
+            ctx.restore();
+        }
+        
+        // Scene 9: Chat app
+        function drawScene9(t, progress) {
+            const fadeIn = easeOutCubic(clamp(progress * 3, 0, 1));
+            
+            ctx.save();
+            ctx.globalAlpha = fadeIn;
+            
+            // Dua HP
+            // HP kiri
+            ctx.fillStyle = '#1a1a1a';
+            drawRoundedRect(300, 300, 120, 200, 20);
+            ctx.fill();
+            
+            ctx.fillStyle = '#0f2436';
+            drawRoundedRect(310, 320, 100, 160, 15);
+            ctx.fill();
+            
+            // HP kanan
+            ctx.fillStyle = '#1a1a1a';
+            drawRoundedRect(860, 300, 120, 200, 20);
+            ctx.fill();
+            
+            ctx.fillStyle = '#0f2436';
+            drawRoundedRect(870, 320, 100, 160, 15);
+            ctx.fill();
+            
+            // Tabung titanium
+            if (progress > 0.3) {
+                const tubeProgress = easeOutCubic(clamp((progress - 0.3) * 3, 0, 1));
+                ctx.globalAlpha = tubeProgress * fadeIn;
+                
+                const tubeGradient = ctx.createLinearGradient(450, 350, 850, 350);
+                tubeGradient.addColorStop(0, '#7f8c8d');
+                tubeGradient.addColorStop(0.5, '#bdc3c7');
+                tubeGradient.addColorStop(1, '#7f8c8d');
+                
+                ctx.fillStyle = tubeGradient;
+                drawRoundedRect(450, 350, 400, 40, 20);
+                ctx.fill();
+                
+                ctx.strokeStyle = COLORS.cyan;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                
+                // Pesan di dalam tabung
+                ctx.fillStyle = COLORS.textLight;
+                ctx.font = 'bold 14px "Courier New", monospace';
+                ctx.textAlign = 'center';
+                ctx.fillText('PESAN RAHASIA', 650, 375);
+            }
+            
+            // Teks
+            const textAlpha = easeOutCubic(clamp(progress * 2, 0, 1));
+            ctx.globalAlpha = textAlpha * fadeIn;
+            
+            ctx.fillStyle = COLORS.cyan;
+            ctx.font = 'bold 36px "Segoe UI", sans-serif';
+            ctx.textAlign = 'center';
+            ctx.shadowColor = COLORS.cyan;
+            ctx.shadowBlur = 15;
+            ctx.fillText('END-TO-END ENCRYPTION', 640, 200);
+            ctx.shadowBlur = 0;
+            
+            ctx.restore();
+        }
+        
+        // Scene 10: Cloud & Harddisk
+        function drawScene10(t, progress) {
+            const fadeIn = easeOutCubic(clamp(progress * 3, 0, 1));
+            
+            ctx.save();
+            ctx.globalAlpha = fadeIn;
+            
+            // Harddisk dengan rantai
+            ctx.fillStyle = '#34495E';
+            drawRoundedRect(250, 350, 180, 120, 10);
+            ctx.fill();
+            
+            ctx.strokeStyle = '#2C3E50';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+            
+            // Rantai
+            if (progress > 0.2) {
+                const chainProgress = easeOutCubic(clamp((progress - 0.2) * 3, 0, 1));
+                ctx.globalAlpha = chainProgress * fadeIn;
+                
+                ctx.strokeStyle = '#95a5a6';
+                ctx.lineWidth = 8;
+                
+                for (let i = 0; i < 3; i++) {
+                    const y = 370 + i * 40;
+                    ctx.beginPath();
+                    ctx.arc(340, y, 15, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+                
+                ctx.globalAlpha = fadeIn;
+            }
+            
+            // Cloud dengan brankas
+            if (progress > 0.4) {
+                const cloudProgress = easeOutBack(clamp((progress - 0.4) * 3, 0, 1));
+                ctx.globalAlpha = cloudProgress * fadeIn;
+                
+                ctx.fillStyle = COLORS.textLight;
+                drawEllipse(800, 350, 80, 50);
+                ctx.fill();
+                
+                // Pintu brankas di cloud
+                ctx.fillStyle = '#1a3a52';
+                drawRoundedRect(770, 330, 60, 80, 5);
+                ctx.fill();
+                
+                ctx.strokeStyle = COLORS.cyan;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                
+                ctx.globalAlpha = fadeIn;
+            }
+            
+            // Agung dengan papan peringatan
+            drawAgung(t, 540, 500, 1.0, true, 10);
+            
+            // Papan peringatan
+            if (progress > 0.6) {
+                const boardProgress = easeOutCubic(clamp((progress - 0.6) * 4, 0, 1));
+                ctx.globalAlpha = boardProgress * fadeIn;
+                
+                ctx.fillStyle = COLORS.yellow;
+                drawRoundedRect(480, 550, 240, 80, 10);
+                ctx.fill();
+                
+                ctx.fillStyle = '#000000';
+                ctx.font = 'bold 18px "Segoe UI", sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('AES = ALAT', 600, 580);
+                ctx.fillText('KEAMANAN = CARA PAKAI', 600, 610);
+            }
+            
+            ctx.restore();
+        }
+        
+        // Scene 11: Papan rangkuman
+        function drawScene11(t, progress) {
+            const fadeIn = easeOutCubic(clamp(progress * 3, 0, 1));
+            
+            ctx.save();
+            ctx.globalAlpha = fadeIn;
+            
+            // Corkboard
+            const corkGradient = ctx.createLinearGradient(200, 150, 200, 550);
+            corkGradient.addColorStop(0, '#8B7355');
+            corkGradient.addColorStop(1, '#654321');
+            
+            ctx.fillStyle = corkGradient;
+            drawRoundedRect(200, 150, 880, 420, 10);
+            ctx.fill();
+            
+            ctx.strokeStyle = '#4a3520';
+            ctx.lineWidth = 8;
+            ctx.stroke();
+            
+            // Tiga polaroid
+            const polaroids = [
+                { x: 350, y: 250, text: 'STANDAR MODERN', delay: 0 },
+                { x: 600, y: 250, text: 'BLOCK CIPHER 256-BIT', delay: 0.2 },
+                { x: 850, y: 250, text: 'ADA DI MANA-MANA', delay: 0.4 }
+            ];
+            
+            polaroids.forEach((polaroid, i) => {
+                const polaroidProgress = easeOutBack(clamp((progress - polaroid.delay) * 3, 0, 1));
+                if (polaroidProgress > 0) {
+                    ctx.save();
+                    ctx.translate(polaroid.x, polaroid.y);
+                    ctx.scale(polaroidProgress, polaroidProgress);
+                    
+                    // Foto polaroid
+                    ctx.fillStyle = '#FFFFFF';
+                    drawRoundedRect(-80, -100, 160, 200, 5);
+                    ctx.fill();
+                    
+                    ctx.strokeStyle = '#CCCCCC';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                    
+                    // Area foto
+                    ctx.fillStyle = '#0f2436';
+                    drawRoundedRect(-70, -90, 140, 120, 3);
+                    ctx.fill();
+                    
+                    // Teks
+                    ctx.fillStyle = '#000000';
+                    ctx.font = 'bold 14px "Segoe UI", sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(polaroid.text, 0, 70);
+                    
+                    // Pin
+                    ctx.fillStyle = COLORS.red;
+                    drawEllipse(0, -100, 8, 8);
+                    ctx.fill();
+                    
+                    ctx.restore();
+                }
+            });
+            
+            // Teks utama
+            const textAlpha = easeOutCubic(clamp(progress * 2, 0, 1));
+            ctx.globalAlpha = textAlpha * fadeIn;
+            
+            ctx.fillStyle = COLORS.yellow;
+            ctx.font = 'bold 36px "Segoe UI", sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('RANGKUMAN', 640, 520);
+            
+            ctx.restore();
+        }
+        
+        // Scene 12: Penutup
+        function drawScene12(t, progress) {
+            const fadeIn = easeOutCubic(clamp(progress * 3, 0, 1));
+            
+            ctx.save();
+            ctx.globalAlpha = fadeIn;
+            
+            // Agung melambaikan tangan
+            drawAgung(t, 400, 450, 1.2, false, 12);
+            
+            // Teaser Part 4
+            if (progress > 0.2) {
+                const teaserProgress = easeOutBack(clamp((progress - 0.2) * 3, 0, 1));
+                ctx.globalAlpha = teaserProgress * fadeIn;
+                
+                ctx.fillStyle = COLORS.cyan;
+                drawRoundedRect(700, 250, 280, 120, 15);
+                ctx.fill();
+                
+                ctx.shadowColor = COLORS.cyan;
+                ctx.shadowBlur = 20;
+                ctx.strokeStyle = '#FFFFFF';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+                
+                ctx.fillStyle = '#000000';
+                ctx.font = 'bold 20px "Segoe UI", sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('NEXT:', 840, 290);
+                ctx.font = 'bold 28px "Segoe UI", sans-serif';
+                ctx.fillText('HASHING & PASSWORD', 840, 325);
+            }
+            
+            // Tombol subscribe, like, share
+            if (progress > 0.5) {
+                const buttonsProgress = easeOutCubic(clamp((progress - 0.5) * 3, 0, 1));
+                ctx.globalAlpha = buttonsProgress * fadeIn;
+                
+                const buttons = [
+                    { x: 700, y: 500, label: 'SUBSCRIBE', color: COLORS.red },
+                    { x: 850, y: 500, label: 'LIKE', color: COLORS.yellow },
+                    { x: 1000, y: 500, label: 'SHARE', color: COLORS.green }
+                ];
+                
+                buttons.forEach((button, i) => {
+                    const buttonDelay = i * 0.1;
+                    const buttonProgress = easeOutBack(clamp((progress - 0.5 - buttonDelay) * 4, 0, 1));
+                    
+                    if (buttonProgress > 0) {
+                        ctx.save();
+                        ctx.globalAlpha = buttonProgress * fadeIn;
+                        ctx.translate(button.x, button.y);
+                        ctx.scale(buttonProgress, buttonProgress);
+                        
+                        ctx.fillStyle = button.color;
+                        drawRoundedRect(-60, -25, 120, 50, 25);
+                        ctx.fill();
+                        
+                        ctx.fillStyle = '#000000';
+                        ctx.font = 'bold 16px "Segoe UI", sans-serif';
+                        ctx.textAlign = 'center';
+                        ctx.fillText(button.label, 0, 5);
+                        
+                        ctx.restore();
+                    }
+                });
+            }
+            
+            ctx.restore();
+        }
+        
+        // ============================================================
+        // MANAJEMEN SCENE
+        // ============================================================
+        
+        function getSceneInfo(t) {
+            const scenes = [
+                { start: 0, end: 5, draw: drawScene1 },
+                { start: 5, end: 15, draw: drawScene2 },
+                { start: 15, end: 25, draw: drawScene3 },
+                { start: 25, end: 45, draw: drawScene4 },
+                { start: 45, end: 65, draw: drawScene5 },
+                { start: 65, end: 90, draw: drawScene6 },
+                { start: 90, end: 120, draw: drawScene7 },
+                { start: 120, end: 140, draw: drawScene8 },
+                { start: 140, end: 160, draw: drawScene9 },
+                { start: 160, end: 180, draw: drawScene10 },
+                { start: 180, end: 220, draw: drawScene11 },
+                { start: 220, end: 240, draw: drawScene12 }
+            ];
+            
+            for (let i = 0; i < scenes.length; i++) {
+                const scene = scenes[i];
+                if (t >= scene.start && t < scene.end) {
+                    return {
+                        index: i,
+                        progress: (t - scene.start) / (scene.end - scene.start),
+                        draw: scene.draw
+                    };
+                }
+            }
+            
+            return null;
+        }
+        
+        // ============================================================
+        // WATERMARK
+        // ============================================================
+        
+        function drawWatermark() {
+            ctx.save();
+            ctx.globalAlpha = 0.6;
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = '18px "Segoe UI", sans-serif';
+            ctx.textAlign = 'right';
+            ctx.fillText('AI Gabut', CANVAS_WIDTH - 30, 40);
+            ctx.restore();
+        }
+        
+        // ============================================================
+        // FUNGSI RENDER UTAMA
+        // ============================================================
+        
+        window.renderFrame = function(t) {
+            // Clear canvas
+            ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+            
+            // Gambar background
+            drawBackground(t, 0);
+            
+            // Dapatkan scene saat ini
+            const sceneInfo = getSceneInfo(t);
+            
+            if (sceneInfo) {
+                // Gambar scene
+                sceneInfo.draw(t, sceneInfo.progress);
+            }
+            
+            // Gambar watermark di setiap frame
+            drawWatermark();
+        };
+        
+        // Render frame pertama untuk warm-up
+        window.renderFrame(0);
+        
+    </script>
 </body>
 </html>
