@@ -1,7 +1,7 @@
 const puppeteer = require('puppeteer');
 const path = require('path');
 const fs = require('fs');
-const { execSync } = require('child_process');
+const { execFileSync } = require('child_process');
 
 // ============================================================
 // KONFIGURASI
@@ -135,10 +135,11 @@ async function render() {
         // Encode video dengan FFmpeg
         console.log('\n🎥 Memulai encoding video dengan FFmpeg...');
         
-        const ffmpegCommand = [
-            'ffmpeg',
+        // ✅ Gunakan array argumen + execFileSync agar karakter seperti
+        //    ( ) * : pada filter -vf TIDAK ditafsirkan oleh shell.
+        const ffmpegArgs = [
             '-y',
-            '-framerate', FPS,
+            '-framerate', String(FPS),
             '-i', path.join(FRAME_DIR, 'frame_%05d.png'),
             '-c:v', 'libx264',
             '-preset', 'medium',
@@ -147,12 +148,12 @@ async function render() {
             '-movflags', '+faststart',
             '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',
             OUTPUT_FILE
-        ].join(' ');
+        ];
         
-        console.log(`⚙️  Command: ${ffmpegCommand}`);
+        console.log(`⚙️  Command: ffmpeg ${ffmpegArgs.join(' ')}`);
         
         try {
-            execSync(ffmpegCommand, { stdio: 'inherit' });
+            execFileSync('ffmpeg', ffmpegArgs, { stdio: 'inherit' });
         } catch (ffmpegError) {
             throw new Error(`FFmpeg encoding gagal: ${ffmpegError.message}`);
         }
